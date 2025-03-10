@@ -86,8 +86,29 @@ function aStar(start, goal) {
             openSet.push({ x: nx, y: ny, g, h, f, path: newPath });
         }
     }
-    console.log(`No path found from (${start.x},${start.y}) to (${goal.x},${goal.y})`);
-    return [];
+    return []; // Empty path if no route found
+}
+
+// Check if placement blocks all paths
+function canPlaceTower(gridX, gridY) {
+    if (grid[gridY][gridX] === 1) return false; // Already occupied
+
+    // Temporarily block the cell
+    grid[gridY][gridX] = 1;
+
+    // Check paths from both entrances
+    const topPath = aStar(openings.top, openings.top.goal);
+    const leftPath = aStar(openings.left, openings.left.goal);
+
+    // Revert the block
+    grid[gridY][gridX] = 0;
+
+    // Allow placement only if both paths remain open
+    if (topPath.length === 0 || leftPath.length === 0) {
+        console.log(`Cannot place tower at (${gridX}, ${gridY}) - blocks all paths`);
+        return false;
+    }
+    return true;
 }
 
 // Enemy class
@@ -208,7 +229,7 @@ class Tower {
         this.cooldown = 0;
         this.level = 1;
         this.angle = 0;
-        this.totalCost = BASE_TOWER_COST; // Track total cost for selling
+        this.totalCost = BASE_TOWER_COST;
         grid[this.gridY][this.gridX] = 1;
     }
 
@@ -224,9 +245,9 @@ class Tower {
     }
 
     sell() {
-        const sellValue = Math.floor(this.totalCost * 0.6); // 60% refund
+        const sellValue = Math.floor(this.totalCost * 0.6);
         money += sellValue;
-        grid[this.gridY][this.gridX] = 0; // Unblock grid
+        grid[this.gridY][this.gridX] = 0;
         towers = towers.filter(t => t !== this);
         selectedTower = null;
         towerPanel.style.display = 'none';
@@ -411,8 +432,8 @@ canvas.addEventListener('click', (e) => {
         }
     }
 
-    // Place new tower if cell is empty and affordable
-    if (money >= BASE_TOWER_COST && grid[gridY][gridX] === 0) {
+    // Place new tower if cell is empty, affordable, and doesn't block all paths
+    if (money >= BASE_TOWER_COST && grid[gridY][gridX] === 0 && canPlaceTower(gridX, gridY)) {
         towers.push(new Tower(x, y));
         money -= BASE_TOWER_COST;
         enemies.forEach(e => {
