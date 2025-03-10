@@ -2,20 +2,29 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// Get HTML elements
+const towerPanel = document.getElementById('towerPanel');
+const towerStats = document.getElementById('towerStats');
+const upgradeButton = document.getElementById('upgradeButton');
+const sellButton = document.getElementById('sellButton');
+
 // Game constants
 const GRID_SIZE = 40;
 const COLS = Math.floor(canvas.width / GRID_SIZE); // 20 columns
 const ROWS = Math.floor(canvas.height / GRID_SIZE); // 15 rows
+const BASE_TOWER_COST = 50;
 
 // Game state
 let enemies = [];
 let towers = [];
+let projectiles = [];
 let money = 1000;
 let score = 0;
 let baseHealth = 20;
 let gameOver = false;
-let level = 1; // Start at level 1
+let level = 1;
 let waveActive = false;
+let selectedTower = null;
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -89,12 +98,12 @@ class Enemy {
         this.goal = openings[this.spawnDirection].goal;
         this.x = this.start.x * GRID_SIZE + GRID_SIZE / 2;
         this.y = this.start.y * GRID_SIZE + GRID_SIZE / 2;
-        this.speed = 1 + Math.floor(level / 5) * 0.2; // Speed increases every 5 levels
+        this.speed = 1 + Math.floor(level / 5) * 0.2;
         this.isBoss = isBoss;
-        this.maxHealth = isBoss ? 500 + level * 50 : 50 + level * 5; // Bosses have much more health
+        this.maxHealth = isBoss ? 500 + level * 50 : 50 + level * 5;
         this.health = this.maxHealth;
-        this.size = isBoss ? 40 : 20; // Bosses are larger
-        this.leakDamage = isBoss ? 5 : 1; // Bosses deal more damage if they escape
+        this.size = isBoss ? 40 : 20;
+        this.leakDamage = isBoss ? 5 : 1;
         this.path = aStar(this.start, this.goal);
         if (this.path.length === 0) console.log(`Enemy spawned with no path: ${this.spawnDirection}`);
     }
@@ -128,7 +137,7 @@ class Enemy {
     }
 
     draw() {
-        ctx.fillStyle = this.isBoss ? 'purple' : 'red'; // Bosses are purple
+        ctx.fillStyle = this.isBoss ? 'purple' : 'red';
         ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
 
         const healthBarWidth = this.size;
@@ -148,6 +157,44 @@ class Enemy {
     }
 }
 
+// Projectile class
+class Projectile {
+    constructor(x, y, target, damage) {
+        this.x = x;
+        this.y = y;
+        this.target = target;
+        this.speed = 5;
+        this.damage = damage;
+        this.size = 5;
+    }
+
+    update() {
+        const dx = this.target.x - this.x;
+        const dy = this.target.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < this.speed) {
+            this.target.health -= this.damage;
+            if (this.target.health <= 0) {
+                enemies = enemies.filter(e => e !== this.target);
+                money += 5;
+                score += 10;
+            }
+            projectiles = projectiles.filter(p => p !== this);
+        } else {
+            this.x += (dx / distance) * this.speed;
+            this.y += (dy / distance) * this.speed;
+        }
+    }
+
+    draw() {
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 // Tower class
 class Tower {
     constructor(x, y) {
@@ -160,6 +207,8 @@ class Tower {
         this.fireRate = 60;
         this.cooldown = 0;
         this.level = 1;
+        this.angle = 0;
+        this.totalCost = BASE_TOWER_COST; // Track total cost for selling
         grid[this.gridY][this.gridX] = 1;
     }
 
@@ -168,38 +217,68 @@ class Tower {
             this.level++;
             this.damage += 10;
             this.range += 20;
+            this.totalCost += 50;
             money -= 50;
+            updateTowerPanel();
         }
+    }
+
+    sell() {
+        const sellValue = Math.floor(this.totalCost * 0.6); // 60% refund
+        money += sellValue;
+        grid[this.gridY][this.gridX] = 0; // Unblock grid
+        towers = towers.filter(t => t !== this);
+        selectedTower = null;
+        towerPanel.style.display = 'none';
+        enemies.forEach(e => {
+            const currentGridX = Math.floor(e.x / GRID_SIZE);
+            const currentGridY = Math.floor(e.y / GRID_SIZE);
+            e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
+        });
     }
 
     update() {
         if (this.cooldown > 0) this.cooldown--;
 
-        if (this.cooldown === 0) {
-            for (let enemy of enemies) {
-                const dx = enemy.x - this.x;
-                const dy = enemy.y - this.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance <= this.range) {
-                    enemy.health -= this.damage;
-                    this.cooldown = this.fireRate;
-                    if (enemy.health <= 0) {
-                        enemies = enemies.filter(e => e !== enemy);
-                        money += 5;
-                        score += 10;
-                    }
-                    break;
-                }
+        let nearestEnemy = null;
+        let minDistance = this.range;
+        for (let enemy of enemies) {
+            const dx = enemy.x - this.x;
+            const dy = enemy.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance <= this.range && distance < minDistance) {
+                nearestEnemy = enemy;
+                minDistance = distance;
+            }
+        }
+
+        if (nearestEnemy) {
+            this.angle = Math.atan2(nearestEnemy.y - this.y, nearestEnemy.x - this.x);
+            if (this.cooldown === 0) {
+                projectiles.push(new Projectile(this.x, this.y, nearestEnemy, this.damage));
+                this.cooldown = this.fireRate;
             }
         }
     }
 
     draw() {
         ctx.fillStyle = `hsl(${120 - this.level * 40}, 100%, 50%)`;
-        ctx.fillRect(this.x - GRID_SIZE / 2, this.y - GRID_SIZE / 2, GRID_SIZE, GRID_SIZE);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, GRID_SIZE / 2 - 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        const barrelLength = GRID_SIZE / 2;
+        ctx.lineTo(this.x + Math.cos(this.angle) * barrelLength, this.y + Math.sin(this.angle) * barrelLength);
+        ctx.stroke();
+
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(0, 0, 255, 0.2)';
+        ctx.lineWidth = 1;
         ctx.stroke();
     }
 }
@@ -210,14 +289,30 @@ function spawnWave() {
     waveActive = true;
 
     if (level % 10 === 0) {
-        // Boss level
-        enemies.push(new Enemy(true)); // Single boss
+        enemies.push(new Enemy(true));
     } else {
-        // Normal wave: spawn 5 enemies
         for (let i = 0; i < 5; i++) {
-            setTimeout(() => enemies.push(new Enemy()), i * 500); // Staggered spawn
+            setTimeout(() => enemies.push(new Enemy()), i * 500);
         }
     }
+}
+
+// Update tower panel
+function updateTowerPanel() {
+    if (!selectedTower) {
+        towerPanel.style.display = 'none';
+        return;
+    }
+    towerPanel.style.display = 'block';
+    towerStats.innerHTML = `
+        Level: ${selectedTower.level}<br>
+        Damage: ${selectedTower.damage}<br>
+        Range: ${selectedTower.range}<br>
+        Fire Rate: ${selectedTower.fireRate} frames<br>
+        Total Cost: $${selectedTower.totalCost}<br>
+        Sell Value: $${Math.floor(selectedTower.totalCost * 0.6)}
+    `;
+    upgradeButton.disabled = selectedTower.level >= 3 || money < 50;
 }
 
 // Game loop
@@ -267,11 +362,16 @@ function gameLoop() {
         tower.draw();
     }
 
+    for (let projectile of projectiles) {
+        projectile.update();
+        projectile.draw();
+    }
+
     // Check if wave is cleared
     if (waveActive && enemies.length === 0 && level < 100) {
         level++;
         waveActive = false;
-        setTimeout(spawnWave, 2000); // 2-second break between waves
+        setTimeout(spawnWave, 2000);
     } else if (level === 100 && enemies.length === 0) {
         ctx.fillStyle = 'black';
         ctx.font = '40px Arial';
@@ -287,7 +387,7 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Place or upgrade tower on click
+// Place or select tower on click
 canvas.addEventListener('click', (e) => {
     if (gameOver) return;
 
@@ -302,30 +402,40 @@ canvas.addEventListener('click', (e) => {
     if ((gridX === topOpening && gridY === 0) || (gridX === 0 && gridY === leftOpening) ||
         (gridX === bottomOpening && gridY === ROWS - 1) || (gridX === COLS - 1 && gridY === rightOpening)) return;
 
-    // Check if clicking an existing tower to upgrade
+    // Check if clicking an existing tower
     for (let tower of towers) {
         if (tower.gridX === gridX && tower.gridY === gridY) {
-            tower.upgrade();
-            enemies.forEach(e => {
-                const currentGridX = Math.floor(e.x / GRID_SIZE);
-                const currentGridY = Math.floor(e.y / GRID_SIZE);
-                e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
-                if (e.path.length === 0) console.log(`Path blocked for enemy from ${e.spawnDirection} at (${currentGridX}, ${currentGridY})`);
-            });
+            selectedTower = tower;
+            updateTowerPanel();
             return;
         }
     }
 
     // Place new tower if cell is empty and affordable
-    if (money >= 50 && grid[gridY][gridX] === 0) {
+    if (money >= BASE_TOWER_COST && grid[gridY][gridX] === 0) {
         towers.push(new Tower(x, y));
-        money -= 50;
+        money -= BASE_TOWER_COST;
         enemies.forEach(e => {
             const currentGridX = Math.floor(e.x / GRID_SIZE);
             const currentGridY = Math.floor(e.y / GRID_SIZE);
             e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
             if (e.path.length === 0) console.log(`Path blocked for enemy from ${e.spawnDirection} at (${currentGridX}, ${currentGridY})`);
         });
+        selectedTower = null;
+        towerPanel.style.display = 'none';
+    }
+});
+
+// Button event listeners
+upgradeButton.addEventListener('click', () => {
+    if (selectedTower) {
+        selectedTower.upgrade();
+    }
+});
+
+sellButton.addEventListener('click', () => {
+    if (selectedTower) {
+        selectedTower.sell();
     }
 });
 
