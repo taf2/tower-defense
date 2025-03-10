@@ -17,6 +17,7 @@ const GRID_SIZE = 40;
 const COLS = Math.floor(canvas.width / GRID_SIZE); // 20 columns
 const ROWS = Math.floor(canvas.height / GRID_SIZE); // 15 rows
 const BASE_TOWER_COST = 50;
+const WAVE_DELAY = 20; // 20 seconds between waves
 
 // Game state
 let enemies = [];
@@ -31,6 +32,7 @@ let waveActive = false;
 let selectedTower = null;
 let gameStarted = false;
 let gamePaused = false;
+let waveTimer = 0; // Seconds until next wave
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -330,6 +332,7 @@ class Tower {
 function spawnWave() {
     if (gameOver || waveActive || !gameStarted) return;
     waveActive = true;
+    waveTimer = 0; // Reset timer
 
     if (level % 10 === 0) {
         enemies.push(new Enemy(true));
@@ -355,6 +358,7 @@ function resetGame() {
     selectedTower = null;
     gameStarted = false;
     gamePaused = false;
+    waveTimer = 0;
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
     for (let x = 0; x < COLS; x++) {
         if (x !== topOpening) grid[0][x] = 1;
@@ -390,7 +394,7 @@ function updateTowerPanel() {
 }
 
 // Game loop
-function gameLoop() {
+function gameLoop(timestamp) {
     if (gameOver) {
         ctx.fillStyle = 'black';
         ctx.font = '40px Arial';
@@ -441,10 +445,19 @@ function gameLoop() {
         projectile.draw();
     }
 
+    // Update wave timer
+    if (gameStarted && !waveActive && !gamePaused && level < 100) {
+        waveTimer += 1 / 60; // Increment by frame time (assuming 60 FPS)
+        if (waveTimer >= WAVE_DELAY) {
+            spawnWave();
+        }
+    }
+
     // Check if wave is cleared
     if (waveActive && enemies.length === 0 && level < 100) {
         level++;
         waveActive = false;
+        waveTimer = 0;
         nextWaveButton.disabled = false;
     } else if (level === 100 && enemies.length === 0) {
         ctx.fillStyle = 'black';
@@ -462,6 +475,9 @@ function gameLoop() {
     ctx.fillText(`Level: ${level}  Health: ${baseHealth}  Money: $${money}  Score: ${score}`, 10, 30);
     if (!gameStarted) {
         ctx.fillText('Click "Start Game" to begin!', canvas.width / 2 - 120, canvas.height / 2);
+    } else if (!waveActive && level < 100) {
+        const timeLeft = Math.ceil(WAVE_DELAY - waveTimer);
+        ctx.fillText(`Next Wave: ${timeLeft}s`, canvas.width / 2 - 50, 50);
     }
 
     requestAnimationFrame(gameLoop);
@@ -525,6 +541,7 @@ startButton.addEventListener('click', () => {
         startButton.disabled = true;
         nextWaveButton.disabled = false;
         pauseButton.disabled = false;
+        spawnWave(); // Start first wave immediately
     }
 });
 
@@ -533,7 +550,9 @@ resetButton.addEventListener('click', () => {
 });
 
 nextWaveButton.addEventListener('click', () => {
-    spawnWave();
+    if (!waveActive && gameStarted) {
+        spawnWave();
+    }
 });
 
 pauseButton.addEventListener('click', () => {
@@ -551,5 +570,5 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Start game loop (no wave yet)
+// Start game loop
 gameLoop();
