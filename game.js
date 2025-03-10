@@ -14,6 +14,8 @@ let money = 1000;
 let score = 0;
 let baseHealth = 20;
 let gameOver = false;
+let level = 1; // Start at level 1
+let waveActive = false;
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -42,8 +44,8 @@ for (let y = 0; y < ROWS; y++) {
 
 // Entry/exit points
 const openings = {
-    top: { x: topOpening, y: 0, goal: { x: bottomOpening, y: ROWS - 1 } }, // Top to Bottom
-    left: { x: 0, y: leftOpening, goal: { x: COLS - 1, y: rightOpening } }  // Left to Right
+    top: { x: topOpening, y: 0, goal: { x: bottomOpening, y: ROWS - 1 } },
+    left: { x: 0, y: leftOpening, goal: { x: COLS - 1, y: rightOpening } }
 };
 
 // A* Pathfinding
@@ -63,7 +65,7 @@ function aStar(start, goal) {
             return current.path.concat([{ x: current.x, y: current.y }]);
         }
 
-        let directions = [[0, 1], [1, 0], [0, -1], [-1, 0]]; // Down, right, up, left
+        let directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
         for (let [dx, dy] of directions) {
             let nx = current.x + dx, ny = current.y + dy;
             if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS || grid[ny][nx] === 1 || closedSet.has(`${nx},${ny}`)) continue;
@@ -81,16 +83,18 @@ function aStar(start, goal) {
 
 // Enemy class
 class Enemy {
-    constructor() {
+    constructor(isBoss = false) {
         this.spawnDirection = Math.random() < 0.5 ? 'top' : 'left';
         this.start = openings[this.spawnDirection];
         this.goal = openings[this.spawnDirection].goal;
         this.x = this.start.x * GRID_SIZE + GRID_SIZE / 2;
         this.y = this.start.y * GRID_SIZE + GRID_SIZE / 2;
-        this.speed = 1;
-        this.maxHealth = 50;
+        this.speed = 1 + Math.floor(level / 5) * 0.2; // Speed increases every 5 levels
+        this.isBoss = isBoss;
+        this.maxHealth = isBoss ? 500 + level * 50 : 50 + level * 5; // Bosses have much more health
         this.health = this.maxHealth;
-        this.size = 20;
+        this.size = isBoss ? 40 : 20; // Bosses are larger
+        this.leakDamage = isBoss ? 5 : 1; // Bosses deal more damage if they escape
         this.path = aStar(this.start, this.goal);
         if (this.path.length === 0) console.log(`Enemy spawned with no path: ${this.spawnDirection}`);
     }
@@ -99,7 +103,7 @@ class Enemy {
         if (this.path.length === 0) {
             if (Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < this.speed &&
                 Math.abs(this.y - this.goal.y * GRID_SIZE - GRID_SIZE / 2) < this.speed) {
-                baseHealth -= 1;
+                baseHealth -= this.leakDamage;
                 enemies = enemies.filter(e => e !== this);
                 if (baseHealth <= 0) gameOver = true;
             }
@@ -124,7 +128,7 @@ class Enemy {
     }
 
     draw() {
-        ctx.fillStyle = 'red';
+        ctx.fillStyle = this.isBoss ? 'purple' : 'red'; // Bosses are purple
         ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
 
         const healthBarWidth = this.size;
@@ -200,6 +204,22 @@ class Tower {
     }
 }
 
+// Wave spawning function
+function spawnWave() {
+    if (gameOver || waveActive) return;
+    waveActive = true;
+
+    if (level % 10 === 0) {
+        // Boss level
+        enemies.push(new Enemy(true)); // Single boss
+    } else {
+        // Normal wave: spawn 5 enemies
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => enemies.push(new Enemy()), i * 500); // Staggered spawn
+        }
+    }
+}
+
 // Game loop
 function gameLoop() {
     if (gameOver) {
@@ -247,18 +267,25 @@ function gameLoop() {
         tower.draw();
     }
 
+    // Check if wave is cleared
+    if (waveActive && enemies.length === 0 && level < 100) {
+        level++;
+        waveActive = false;
+        setTimeout(spawnWave, 2000); // 2-second break between waves
+    } else if (level === 100 && enemies.length === 0) {
+        ctx.fillStyle = 'black';
+        ctx.font = '40px Arial';
+        ctx.fillText('You Win!', canvas.width / 2 - 80, canvas.height / 2);
+        gameOver = true;
+    }
+
     // HUD
     ctx.fillStyle = 'black';
     ctx.font = '20px Arial';
-    ctx.fillText(`Health: ${baseHealth}  Money: $${money}  Score: ${score}`, 10, 30);
+    ctx.fillText(`Level: ${level}  Health: ${baseHealth}  Money: $${money}  Score: ${score}`, 10, 30);
 
     requestAnimationFrame(gameLoop);
 }
-
-// Spawn enemies periodically
-setInterval(() => {
-    if (!gameOver) enemies.push(new Enemy());
-}, 2000); // Back to original spawn rate
 
 // Place or upgrade tower on click
 canvas.addEventListener('click', (e) => {
@@ -280,8 +307,10 @@ canvas.addEventListener('click', (e) => {
         if (tower.gridX === gridX && tower.gridY === gridY) {
             tower.upgrade();
             enemies.forEach(e => {
-                e.path = aStar(e.start, e.goal);
-                if (e.path.length === 0) console.log(`Path blocked for enemy from ${e.spawnDirection}`);
+                const currentGridX = Math.floor(e.x / GRID_SIZE);
+                const currentGridY = Math.floor(e.y / GRID_SIZE);
+                e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
+                if (e.path.length === 0) console.log(`Path blocked for enemy from ${e.spawnDirection} at (${currentGridX}, ${currentGridY})`);
             });
             return;
         }
@@ -292,11 +321,14 @@ canvas.addEventListener('click', (e) => {
         towers.push(new Tower(x, y));
         money -= 50;
         enemies.forEach(e => {
-            e.path = aStar(e.start, e.goal);
-            if (e.path.length === 0) console.log(`Path blocked for enemy from ${e.spawnDirection}`);
+            const currentGridX = Math.floor(e.x / GRID_SIZE);
+            const currentGridY = Math.floor(e.y / GRID_SIZE);
+            e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
+            if (e.path.length === 0) console.log(`Path blocked for enemy from ${e.spawnDirection} at (${currentGridX}, ${currentGridY})`);
         });
     }
 });
 
-// Start game
+// Start game with first wave
+spawnWave();
 gameLoop();
