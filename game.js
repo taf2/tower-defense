@@ -330,7 +330,7 @@ class Tower {
 // Wave spawning function
 function spawnWave() {
     if (gameOver || !gameStarted) return;
-    waveTimer = WAVE_DELAY; // Start timer at wave spawn
+    waveTimer = WAVE_DELAY; // Reset timer at wave spawn
 
     if (level % 10 === 0) {
         enemies.push(new Enemy(true));
@@ -339,7 +339,6 @@ function spawnWave() {
             setTimeout(() => enemies.push(new Enemy()), i * 500);
         }
     }
-    nextWaveButton.disabled = true;
     level++;
 }
 
@@ -395,7 +394,7 @@ function updateTowerPanel() {
 function gameLoop(timestamp) {
     if (gameOver) {
         ctx.fillStyle = 'black';
-        ctx.font = '40px Arial';
+        ctx.font = '20px Arial';
         ctx.fillText('Game Over!', canvas.width / 2 - 100, canvas.height / 2);
         return;
     }
@@ -470,7 +469,7 @@ function gameLoop(timestamp) {
         ctx.fillText('Click "Start Game" to begin!', canvas.width / 2 - 120, canvas.height / 2);
     } else if (waveTimer > 0) {
         const timeLeft = Math.ceil(waveTimer);
-        ctx.fillText(`Wave Timer: ${timeLeft}s`, canvas.width / 2 - 50, 50);
+        ctx.fillText(`${timeLeft}s`, 760, 20); // Top-right, just the timer
     }
 
     requestAnimationFrame(gameLoop);
