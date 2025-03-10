@@ -7,6 +7,10 @@ const towerPanel = document.getElementById('towerPanel');
 const towerStats = document.getElementById('towerStats');
 const upgradeButton = document.getElementById('upgradeButton');
 const sellButton = document.getElementById('sellButton');
+const startButton = document.getElementById('startButton');
+const resetButton = document.getElementById('resetButton');
+const nextWaveButton = document.getElementById('nextWaveButton');
+const pauseButton = document.getElementById('pauseButton');
 
 // Game constants
 const GRID_SIZE = 40;
@@ -25,6 +29,8 @@ let gameOver = false;
 let level = 1;
 let waveActive = false;
 let selectedTower = null;
+let gameStarted = false;
+let gamePaused = false;
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -120,13 +126,13 @@ class Enemy {
         this.size = isBoss ? 40 : 20;
         this.leakDamage = isBoss ? 5 : 1;
         this.path = aStar(this.start, this.goal);
-        this.angle = 0; // Direction of movement
+        this.angle = 0;
         if (this.path.length === 0) console.log(`Enemy spawned with no path: ${this.spawnDirection}`);
     }
 
     update() {
-        if (this.path.length === 0) {
-            if (Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < this.speed &&
+        if (!gameStarted || gamePaused || this.path.length === 0) {
+            if (this.path.length === 0 && Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < this.speed &&
                 Math.abs(this.y - this.goal.y * GRID_SIZE - GRID_SIZE / 2) < this.speed) {
                 baseHealth -= this.leakDamage;
                 enemies = enemies.filter(e => e !== this);
@@ -149,18 +155,16 @@ class Enemy {
         } else {
             this.x += (dx / distance) * this.speed;
             this.y += (dy / distance) * this.speed;
-            this.angle = Math.atan2(dy, dx); // Update direction for eyes
+            this.angle = Math.atan2(dy, dx);
         }
     }
 
     draw() {
-        // Draw circular body
         ctx.fillStyle = this.isBoss ? 'purple' : 'red';
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw eyes
         ctx.fillStyle = 'white';
         const eyeOffset = this.size / 4;
         const eyeSize = this.size / 8;
@@ -175,7 +179,6 @@ class Enemy {
         ctx.arc(eyeX2, eyeY2, eyeSize, 0, Math.PI * 2);
         ctx.fill();
 
-        // Health bar
         const healthBarWidth = this.size;
         const healthBarHeight = 5;
         const healthBarX = this.x - this.size / 2;
@@ -203,6 +206,8 @@ class Projectile {
     }
 
     update() {
+        if (!gameStarted || gamePaused) return;
+
         const dx = this.target.x - this.x;
         const dy = this.target.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -272,6 +277,8 @@ class Tower {
     }
 
     update() {
+        if (!gameStarted || gamePaused) return;
+
         if (this.cooldown > 0) this.cooldown--;
 
         let nearestEnemy = null;
@@ -309,7 +316,6 @@ class Tower {
         ctx.lineTo(this.x + Math.cos(this.angle) * barrelLength, this.y + Math.sin(this.angle) * barrelLength);
         ctx.stroke();
 
-        // Draw range only if selected
         if (this === selectedTower) {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
@@ -322,7 +328,7 @@ class Tower {
 
 // Wave spawning function
 function spawnWave() {
-    if (gameOver || waveActive) return;
+    if (gameOver || waveActive || !gameStarted) return;
     waveActive = true;
 
     if (level % 10 === 0) {
@@ -332,6 +338,37 @@ function spawnWave() {
             setTimeout(() => enemies.push(new Enemy()), i * 500);
         }
     }
+    nextWaveButton.disabled = true;
+}
+
+// Reset game function
+function resetGame() {
+    enemies = [];
+    towers = [];
+    projectiles = [];
+    money = 1000;
+    score = 0;
+    baseHealth = 20;
+    gameOver = false;
+    level = 1;
+    waveActive = false;
+    selectedTower = null;
+    gameStarted = false;
+    gamePaused = false;
+    grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+    for (let x = 0; x < COLS; x++) {
+        if (x !== topOpening) grid[0][x] = 1;
+        if (x !== bottomOpening) grid[ROWS - 1][x] = 1;
+    }
+    for (let y = 0; y < ROWS; y++) {
+        if (y !== leftOpening) grid[y][0] = 1;
+        if (y !== rightOpening) grid[y][COLS - 1] = 1;
+    }
+    towerPanel.style.display = 'none';
+    startButton.disabled = false;
+    nextWaveButton.disabled = true;
+    pauseButton.disabled = true;
+    pauseButton.textContent = 'Pause';
 }
 
 // Update tower panel
@@ -408,18 +445,24 @@ function gameLoop() {
     if (waveActive && enemies.length === 0 && level < 100) {
         level++;
         waveActive = false;
-        setTimeout(spawnWave, 2000);
+        nextWaveButton.disabled = false;
     } else if (level === 100 && enemies.length === 0) {
         ctx.fillStyle = 'black';
         ctx.font = '40px Arial';
         ctx.fillText('You Win!', canvas.width / 2 - 80, canvas.height / 2);
         gameOver = true;
+        startButton.disabled = true;
+        nextWaveButton.disabled = true;
+        pauseButton.disabled = true;
     }
 
     // HUD
     ctx.fillStyle = 'black';
     ctx.font = '20px Arial';
     ctx.fillText(`Level: ${level}  Health: ${baseHealth}  Money: $${money}  Score: ${score}`, 10, 30);
+    if (!gameStarted) {
+        ctx.fillText('Click "Start Game" to begin!', canvas.width / 2 - 120, canvas.height / 2);
+    }
 
     requestAnimationFrame(gameLoop);
 }
@@ -434,22 +477,19 @@ canvas.addEventListener('click', (e) => {
     const gridX = Math.floor(x / GRID_SIZE);
     const gridY = Math.floor(y / GRID_SIZE);
 
-    // Prevent placing towers on borders or openings
     if (gridY === 0 || gridY === ROWS - 1 || gridX === 0 || gridX === COLS - 1) return;
     if ((gridX === topOpening && gridY === 0) || (gridX === 0 && gridY === leftOpening) ||
         (gridX === bottomOpening && gridY === ROWS - 1) || (gridX === COLS - 1 && gridY === rightOpening)) return;
 
-    // Check if clicking an existing tower
     for (let tower of towers) {
         if (tower.gridX === gridX && tower.gridY === gridY) {
             selectedTower = tower;
             updateTowerPanel();
-            e.stopPropagation(); // Prevent deselecting immediately
+            e.stopPropagation();
             return;
         }
     }
 
-    // Place new tower if cell is empty, affordable, and doesn't block all paths
     if (money >= BASE_TOWER_COST && grid[gridY][gridX] === 0 && canPlaceTower(gridX, gridY)) {
         towers.push(new Tower(x, y));
         money -= BASE_TOWER_COST;
@@ -468,14 +508,38 @@ canvas.addEventListener('click', (e) => {
 upgradeButton.addEventListener('click', (e) => {
     if (selectedTower) {
         selectedTower.upgrade();
-        e.stopPropagation(); // Prevent deselecting
+        e.stopPropagation();
     }
 });
 
 sellButton.addEventListener('click', (e) => {
     if (selectedTower) {
         selectedTower.sell();
-        e.stopPropagation(); // Prevent deselecting
+        e.stopPropagation();
+    }
+});
+
+startButton.addEventListener('click', () => {
+    if (!gameStarted) {
+        gameStarted = true;
+        startButton.disabled = true;
+        nextWaveButton.disabled = false;
+        pauseButton.disabled = false;
+    }
+});
+
+resetButton.addEventListener('click', () => {
+    resetGame();
+});
+
+nextWaveButton.addEventListener('click', () => {
+    spawnWave();
+});
+
+pauseButton.addEventListener('click', () => {
+    if (gameStarted && !gameOver) {
+        gamePaused = !gamePaused;
+        pauseButton.textContent = gamePaused ? 'Resume' : 'Pause';
     }
 });
 
@@ -487,6 +551,5 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// Start game with first wave
-spawnWave();
+// Start game loop (no wave yet)
 gameLoop();

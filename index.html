@@ -9,16 +9,20 @@
         #towerPanel {
             position: absolute;
             top: 50px;
-            left: 820px; /* Right of 800px canvas */
+            left: 820px;
             width: 200px;
             padding: 10px;
             background: rgba(255, 255, 255, 0.9);
             border: 1px solid black;
-            display: none; /* Hidden by default */
+            display: none;
+        }
+        #controls {
+            margin-top: 10px;
+            text-align: center;
         }
         button {
-            margin: 5px 0;
-            width: 100%;
+            margin: 5px;
+            padding: 5px 10px;
         }
     </style>
 </head>
@@ -29,6 +33,12 @@
         <p id="towerStats"></p>
         <button id="upgradeButton">Upgrade ($50)</button>
         <button id="sellButton">Sell</button>
+    </div>
+    <div id="controls">
+        <button id="startButton">Start Game</button>
+        <button id="resetButton">Reset Game</button>
+        <button id="nextWaveButton" disabled>Send Next Wave</button>
+        <button id="pauseButton" disabled>Pause</button>
     </div>
     <script src="game.js"></script>
 </body>
