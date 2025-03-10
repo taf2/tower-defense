@@ -26,8 +26,10 @@ class Enemy {
         this.x = path[0].x;
         this.y = path[0].y;
         this.speed = 1;
-        this.health = 50;
+        this.maxHealth = 50;
+        this.health = this.maxHealth;
         this.targetIndex = 1;
+        this.size = 20;
     }
 
     update() {
@@ -41,9 +43,8 @@ class Enemy {
             this.y = target.y;
             this.targetIndex++;
             if (this.targetIndex >= path.length) {
-                // Enemy reached end
                 enemies = enemies.filter(e => e !== this);
-                money -= 10; // Penalty for letting enemy through
+                money -= 10;
                 return;
             }
         } else {
@@ -54,9 +55,22 @@ class Enemy {
 
     draw() {
         ctx.fillStyle = 'red';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, 10, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+
+        const healthBarWidth = this.size;
+        const healthBarHeight = 5;
+        const healthBarX = this.x - this.size / 2;
+        const healthBarY = this.y - this.size / 2 - 10;
+        ctx.fillStyle = 'gray';
+        ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+
+        const healthPercentage = this.health / this.maxHealth;
+        ctx.fillStyle = 'green';
+        ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight);
+
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
     }
 }
 
@@ -66,13 +80,13 @@ class Tower {
         this.x = x;
         this.y = y;
         this.range = 100;
-        this.fireRate = 60; // Frames between shots
+        this.fireRate = 60;
         this.cooldown = 0;
     }
 
     update() {
         if (this.cooldown > 0) this.cooldown--;
-        
+
         if (this.cooldown === 0) {
             for (let enemy of enemies) {
                 const dx = enemy.x - this.x;
@@ -93,10 +107,8 @@ class Tower {
     }
 
     draw() {
-        // Tower base
         ctx.fillStyle = 'blue';
         ctx.fillRect(this.x - 15, this.y - 15, 30, 30);
-        // Range circle
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(0, 0, 255, 0.2)';
@@ -108,7 +120,6 @@ class Tower {
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw path
     ctx.beginPath();
     ctx.moveTo(path[0].x, path[0].y);
     for (let i = 1; i < path.length; i++) {
@@ -118,19 +129,16 @@ function gameLoop() {
     ctx.lineWidth = 20;
     ctx.stroke();
 
-    // Update and draw enemies
     for (let enemy of enemies) {
         enemy.update();
         enemy.draw();
     }
 
-    // Update and draw towers
     for (let tower of towers) {
         tower.update();
         tower.draw();
     }
 
-    // HUD
     ctx.fillStyle = 'black';
     ctx.font = '20px Arial';
     ctx.fillText(`Money: $${money}  Score: ${score}`, 10, 30);
@@ -148,7 +156,7 @@ canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
+
     if (money >= 50) {
         towers.push(new Tower(x, y));
         money -= 50;
