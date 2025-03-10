@@ -86,24 +86,18 @@ function aStar(start, goal) {
             openSet.push({ x: nx, y: ny, g, h, f, path: newPath });
         }
     }
-    return []; // Empty path if no route found
+    return [];
 }
 
 // Check if placement blocks all paths
 function canPlaceTower(gridX, gridY) {
-    if (grid[gridY][gridX] === 1) return false; // Already occupied
+    if (grid[gridY][gridX] === 1) return false;
 
-    // Temporarily block the cell
     grid[gridY][gridX] = 1;
-
-    // Check paths from both entrances
     const topPath = aStar(openings.top, openings.top.goal);
     const leftPath = aStar(openings.left, openings.left.goal);
-
-    // Revert the block
     grid[gridY][gridX] = 0;
 
-    // Allow placement only if both paths remain open
     if (topPath.length === 0 || leftPath.length === 0) {
         console.log(`Cannot place tower at (${gridX}, ${gridY}) - blocks all paths`);
         return false;
@@ -126,6 +120,7 @@ class Enemy {
         this.size = isBoss ? 40 : 20;
         this.leakDamage = isBoss ? 5 : 1;
         this.path = aStar(this.start, this.goal);
+        this.angle = 0; // Direction of movement
         if (this.path.length === 0) console.log(`Enemy spawned with no path: ${this.spawnDirection}`);
     }
 
@@ -154,24 +149,42 @@ class Enemy {
         } else {
             this.x += (dx / distance) * this.speed;
             this.y += (dy / distance) * this.speed;
+            this.angle = Math.atan2(dy, dx); // Update direction for eyes
         }
     }
 
     draw() {
+        // Draw circular body
         ctx.fillStyle = this.isBoss ? 'purple' : 'red';
-        ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+        ctx.fill();
 
+        // Draw eyes
+        ctx.fillStyle = 'white';
+        const eyeOffset = this.size / 4;
+        const eyeSize = this.size / 8;
+        const eyeX1 = this.x + Math.cos(this.angle) * eyeOffset - Math.sin(this.angle) * eyeOffset / 2;
+        const eyeY1 = this.y + Math.sin(this.angle) * eyeOffset + Math.cos(this.angle) * eyeOffset / 2;
+        const eyeX2 = this.x + Math.cos(this.angle) * eyeOffset + Math.sin(this.angle) * eyeOffset / 2;
+        const eyeY2 = this.y + Math.sin(this.angle) * eyeOffset - Math.cos(this.angle) * eyeOffset / 2;
+        ctx.beginPath();
+        ctx.arc(eyeX1, eyeY1, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(eyeX2, eyeY2, eyeSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Health bar
         const healthBarWidth = this.size;
         const healthBarHeight = 5;
         const healthBarX = this.x - this.size / 2;
         const healthBarY = this.y - this.size / 2 - 10;
         ctx.fillStyle = 'gray';
         ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-
         const healthPercentage = this.health / this.maxHealth;
         ctx.fillStyle = 'green';
         ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercentage, healthBarHeight);
-
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 1;
         ctx.strokeRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
@@ -296,11 +309,14 @@ class Tower {
         ctx.lineTo(this.x + Math.cos(this.angle) * barrelLength, this.y + Math.sin(this.angle) * barrelLength);
         ctx.stroke();
 
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 0, 255, 0.2)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+        // Draw range only if selected
+        if (this === selectedTower) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(0, 0, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     }
 }
 
@@ -408,7 +424,7 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
-// Place or select tower on click
+// Place or select tower on canvas click
 canvas.addEventListener('click', (e) => {
     if (gameOver) return;
 
@@ -428,6 +444,7 @@ canvas.addEventListener('click', (e) => {
         if (tower.gridX === gridX && tower.gridY === gridY) {
             selectedTower = tower;
             updateTowerPanel();
+            e.stopPropagation(); // Prevent deselecting immediately
             return;
         }
     }
@@ -448,15 +465,25 @@ canvas.addEventListener('click', (e) => {
 });
 
 // Button event listeners
-upgradeButton.addEventListener('click', () => {
+upgradeButton.addEventListener('click', (e) => {
     if (selectedTower) {
         selectedTower.upgrade();
+        e.stopPropagation(); // Prevent deselecting
     }
 });
 
-sellButton.addEventListener('click', () => {
+sellButton.addEventListener('click', (e) => {
     if (selectedTower) {
         selectedTower.sell();
+        e.stopPropagation(); // Prevent deselecting
+    }
+});
+
+// Deselect tower when clicking anywhere on the page
+document.addEventListener('click', (e) => {
+    if (!gameOver && e.target !== canvas && e.target !== upgradeButton && e.target !== sellButton) {
+        selectedTower = null;
+        towerPanel.style.display = 'none';
     }
 });
 
