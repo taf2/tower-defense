@@ -20,7 +20,7 @@
             margin-top: 10px;
             text-align: center;
         }
-        button {
+        button, select {
             margin: 5px;
             padding: 5px 10px;
         }
@@ -40,6 +40,11 @@
         <button id="nextWaveButton" disabled>Send Next Wave</button>
         <button id="pauseButton" disabled>Pause</button>
         <button id="loadButton">Load Saved Game</button>
+        <select id="difficultySelect">
+            <option value="easy">Easy (20s)</option>
+            <option value="normal">Normal (10s)</option>
+            <option value="hard">Hard (5s)</option>
+        </select>
     </div>
     <audio id="enemyDeathSound" preload="auto">
         <source src="enemy-death.mp3" type="audio/mpeg">

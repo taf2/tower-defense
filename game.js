@@ -12,6 +12,7 @@ const resetButton = document.getElementById('resetButton');
 const nextWaveButton = document.getElementById('nextWaveButton');
 const pauseButton = document.getElementById('pauseButton');
 const loadButton = document.getElementById('loadButton');
+const difficultySelect = document.getElementById('difficultySelect');
 const enemyDeathSound = document.getElementById('enemyDeathSound');
 const turretShootSound = document.getElementById('turretShootSound');
 
@@ -20,7 +21,13 @@ const GRID_SIZE = 40;
 const COLS = Math.floor(canvas.width / GRID_SIZE); // 20 columns
 const ROWS = Math.floor(canvas.height / GRID_SIZE); // 15 rows
 const BASE_TOWER_COST = 50;
-const WAVE_DELAY = 20; // 20 seconds from wave start to next wave
+
+// Difficulty settings
+const DIFFICULTY_LEVELS = {
+    easy: 20,   // 20 seconds
+    normal: 10, // 10 seconds
+    hard: 5     // 5 seconds
+};
 
 // Game state
 let enemies = [];
@@ -35,6 +42,9 @@ let selectedTower = null;
 let gameStarted = false;
 let gamePaused = false;
 let waveTimer = 0; // Seconds until next wave (counts down)
+let difficulty = 'easy'; // Default difficulty
+let WAVE_DELAY = DIFFICULTY_LEVELS[difficulty]; // Initial wave delay
+let waveJustCleared = false; // New flag to control saving
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -95,13 +105,14 @@ function saveGameState() {
         baseHealth,
         level,
         gameStarted,
+        difficulty,
         towers: towers.map(t => ({
             gridX: t.gridX,
             gridY: t.gridY,
             level: t.level,
             totalCost: t.totalCost
         })),
-        grid: grid.map(row => [...row]) // Deep copy of grid
+        grid: grid.map(row => [...row])
     };
 
     const transaction = db.transaction(['gameState'], 'readwrite');
@@ -126,6 +137,9 @@ function loadGameState() {
             baseHealth = state.baseHealth;
             level = state.level;
             gameStarted = state.gameStarted;
+            difficulty = state.difficulty;
+            WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
+            difficultySelect.value = difficulty;
             towers = state.towers.map(t => {
                 const tower = new Tower(t.gridX * GRID_SIZE, t.gridY * GRID_SIZE);
                 tower.level = t.level;
@@ -135,15 +149,16 @@ function loadGameState() {
                 return tower;
             });
             grid = state.grid.map(row => [...row]);
-            enemies = []; // Reset enemies to avoid mid-wave issues
-            projectiles = []; // Clear projectiles
+            enemies = [];
+            projectiles = [];
             gameOver = false;
-            gamePaused = false;
-            waveTimer = 0; // Reset timer to force manual wave start
-            startButton.disabled = gameStarted;
-            nextWaveButton.disabled = !gameStarted;
-            pauseButton.disabled = !gameStarted;
-            pauseButton.textContent = 'Pause';
+            gamePaused = true; // Start paused after load
+            waveTimer = WAVE_DELAY; // Set to full delay for next wave
+            waveJustCleared = false;
+            startButton.disabled = true; // Game already started
+            nextWaveButton.disabled = false;
+            pauseButton.disabled = false;
+            pauseButton.textContent = 'Resume'; // Reflect paused state
             towerPanel.style.display = 'none';
             selectedTower = null;
             console.log('Game state loaded');
@@ -427,7 +442,8 @@ class Tower {
 // Wave spawning function
 function spawnWave() {
     if (gameOver || !gameStarted) return;
-    waveTimer = WAVE_DELAY; // Reset timer at wave spawn
+    waveTimer = WAVE_DELAY;
+    waveJustCleared = false; // Reset flag when new wave starts
 
     if (level % 10 === 0) {
         enemies.push(new Enemy(true));
@@ -453,6 +469,9 @@ function resetGame() {
     gameStarted = false;
     gamePaused = false;
     waveTimer = 0;
+    difficulty = difficultySelect.value;
+    WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
+    waveJustCleared = false;
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
     for (let x = 0; x < COLS; x++) {
         if (x !== topOpening) grid[0][x] = 1;
@@ -540,15 +559,16 @@ function gameLoop(timestamp) {
 
     // Update wave timer
     if (gameStarted && !gamePaused && waveTimer > 0) {
-        waveTimer -= 1 / 60; // Decrement by frame time (assuming 60 FPS)
+        waveTimer -= 1 / 60;
         if (waveTimer <= 0 && level < 100) {
             spawnWave();
         }
     }
 
-    // Save game state when wave clears
-    if (gameStarted && enemies.length === 0 && level < 100 && db) {
+    // Save game state once when wave clears
+    if (gameStarted && enemies.length === 0 && level < 100 && db && !waveJustCleared) {
         saveGameState();
+        waveJustCleared = true; // Prevent repeated saves
     }
 
     // Check for win condition
@@ -577,7 +597,7 @@ function gameLoop(timestamp) {
         ctx.fillText('Click "Start Game" to begin!', canvas.width / 2 - 120, canvas.height / 2);
     } else if (waveTimer > 0) {
         const timeLeft = Math.ceil(waveTimer);
-        ctx.fillText(`${timeLeft}s`, 760, 20); // Top-right, just the timer
+        ctx.fillText(`${timeLeft}s`, 760, 20);
     }
 
     requestAnimationFrame(gameLoop);
@@ -620,7 +640,7 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
-// Button event listeners
+// Button and select event listeners
 upgradeButton.addEventListener('click', (e) => {
     if (selectedTower) {
         selectedTower.upgrade();
@@ -641,7 +661,7 @@ startButton.addEventListener('click', () => {
         startButton.disabled = true;
         nextWaveButton.disabled = false;
         pauseButton.disabled = false;
-        spawnWave(); // Start first wave immediately
+        spawnWave();
     }
 });
 
@@ -668,6 +688,13 @@ loadButton.addEventListener('click', () => {
     } else {
         console.log('Database not ready yet');
     }
+});
+
+difficultySelect.addEventListener('change', () => {
+    difficulty = difficultySelect.value;
+    WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
+    if (waveTimer > WAVE_DELAY) waveTimer = WAVE_DELAY;
+    console.log(`Difficulty set to ${difficulty} (${WAVE_DELAY}s)`);
 });
 
 // Deselect tower when clicking anywhere on the page
