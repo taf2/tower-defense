@@ -11,6 +11,7 @@ const startButton = document.getElementById('startButton');
 const resetButton = document.getElementById('resetButton');
 const nextWaveButton = document.getElementById('nextWaveButton');
 const pauseButton = document.getElementById('pauseButton');
+const loadButton = document.getElementById('loadButton');
 const enemyDeathSound = document.getElementById('enemyDeathSound');
 const turretShootSound = document.getElementById('turretShootSound');
 
@@ -19,7 +20,7 @@ const GRID_SIZE = 40;
 const COLS = Math.floor(canvas.width / GRID_SIZE); // 20 columns
 const ROWS = Math.floor(canvas.height / GRID_SIZE); // 15 rows
 const BASE_TOWER_COST = 50;
-const WAVE_DELAY = 10; // 10 seconds from wave start to next wave
+const WAVE_DELAY = 20; // 20 seconds from wave start to next wave
 
 // Game state
 let enemies = [];
@@ -65,6 +66,96 @@ const openings = {
     top: { x: topOpening, y: 0, goal: { x: bottomOpening, y: ROWS - 1 } },
     left: { x: 0, y: leftOpening, goal: { x: COLS - 1, y: rightOpening } }
 };
+
+// IndexedDB Setup
+let db;
+const dbRequest = indexedDB.open('TowerDefenseDB', 1);
+
+dbRequest.onupgradeneeded = function(event) {
+    db = event.target.result;
+    db.createObjectStore('gameState', { keyPath: 'id' });
+};
+
+dbRequest.onsuccess = function(event) {
+    db = event.target.result;
+    // Optionally load saved state on startup
+    // loadGameState(); // Uncomment to auto-load on refresh
+};
+
+dbRequest.onerror = function(event) {
+    console.error('IndexedDB error:', event.target.errorCode);
+};
+
+// Save game state to IndexedDB
+function saveGameState() {
+    const state = {
+        id: 'currentGame',
+        money,
+        score,
+        baseHealth,
+        level,
+        gameStarted,
+        towers: towers.map(t => ({
+            gridX: t.gridX,
+            gridY: t.gridY,
+            level: t.level,
+            totalCost: t.totalCost
+        })),
+        grid: grid.map(row => [...row]) // Deep copy of grid
+    };
+
+    const transaction = db.transaction(['gameState'], 'readwrite');
+    const store = transaction.objectStore('gameState');
+    store.put(state);
+
+    transaction.oncomplete = () => console.log('Game state saved');
+    transaction.onerror = () => console.error('Save error:', transaction.error);
+}
+
+// Load game state from IndexedDB
+function loadGameState() {
+    const transaction = db.transaction(['gameState'], 'readonly');
+    const store = transaction.objectStore('gameState');
+    const request = store.get('currentGame');
+
+    request.onsuccess = function(event) {
+        const state = event.target.result;
+        if (state) {
+            money = state.money;
+            score = state.score;
+            baseHealth = state.baseHealth;
+            level = state.level;
+            gameStarted = state.gameStarted;
+            towers = state.towers.map(t => {
+                const tower = new Tower(t.gridX * GRID_SIZE, t.gridY * GRID_SIZE);
+                tower.level = t.level;
+                tower.damage = 10 + (t.level - 1) * 10;
+                tower.range = 100 + (t.level - 1) * 20;
+                tower.totalCost = t.totalCost;
+                return tower;
+            });
+            grid = state.grid.map(row => [...row]);
+            enemies = []; // Reset enemies to avoid mid-wave issues
+            projectiles = []; // Clear projectiles
+            gameOver = false;
+            gamePaused = false;
+            waveTimer = 0; // Reset timer to force manual wave start
+            startButton.disabled = gameStarted;
+            nextWaveButton.disabled = !gameStarted;
+            pauseButton.disabled = !gameStarted;
+            pauseButton.textContent = 'Pause';
+            towerPanel.style.display = 'none';
+            selectedTower = null;
+            console.log('Game state loaded');
+        } else {
+            console.log('No saved game state found');
+        }
+    };
+
+    request.onerror = function(event) {
+        console.error('Load error:', event.target.errorCode);
+    };
+}
 
 // A* Pathfinding
 function aStar(start, goal) {
@@ -221,8 +312,8 @@ class Projectile {
                 enemies = enemies.filter(e => e !== this.target);
                 money += 5;
                 score += 10;
-                enemyDeathSound.currentTime = 0; // Reset to start
-                enemyDeathSound.play(); // Play death sound
+                enemyDeathSound.currentTime = 0;
+                enemyDeathSound.play();
             }
             projectiles = projectiles.filter(p => p !== this);
         } else {
@@ -263,7 +354,7 @@ class Tower {
             this.range += 20;
             this.totalCost += 50;
             money -= 50;
-            updateTowerPanel(); // Still updates stats
+            updateTowerPanel();
         }
     }
 
@@ -285,7 +376,7 @@ class Tower {
         if (!gameStarted || gamePaused) return;
 
         if (this.cooldown > 0) this.cooldown--;
-        
+
         let nearestEnemy = null;
         let minDistance = this.range;
         for (let enemy of enemies) {
@@ -393,7 +484,6 @@ function updateTowerPanel() {
         Total Cost: $${selectedTower.totalCost}<br>
         Sell Value: $${Math.floor(selectedTower.totalCost * 0.6)}
     `;
-    // Removed upgradeButton.disabled logic from here
 }
 
 // Game loop
@@ -454,6 +544,11 @@ function gameLoop(timestamp) {
         if (waveTimer <= 0 && level < 100) {
             spawnWave();
         }
+    }
+
+    // Save game state when wave clears
+    if (gameStarted && enemies.length === 0 && level < 100 && db) {
+        saveGameState();
     }
 
     // Check for win condition
@@ -564,6 +659,14 @@ pauseButton.addEventListener('click', () => {
     if (gameStarted && !gameOver) {
         gamePaused = !gamePaused;
         pauseButton.textContent = gamePaused ? 'Resume' : 'Pause';
+    }
+});
+
+loadButton.addEventListener('click', () => {
+    if (db) {
+        loadGameState();
+    } else {
+        console.log('Database not ready yet');
     }
 });
 
