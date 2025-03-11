@@ -11,13 +11,15 @@ const startButton = document.getElementById('startButton');
 const resetButton = document.getElementById('resetButton');
 const nextWaveButton = document.getElementById('nextWaveButton');
 const pauseButton = document.getElementById('pauseButton');
+const enemyDeathSound = document.getElementById('enemyDeathSound');
+const turretShootSound = document.getElementById('turretShootSound');
 
 // Game constants
 const GRID_SIZE = 40;
 const COLS = Math.floor(canvas.width / GRID_SIZE); // 20 columns
 const ROWS = Math.floor(canvas.height / GRID_SIZE); // 15 rows
 const BASE_TOWER_COST = 50;
-const WAVE_DELAY = 20; // 20 seconds from wave start to next wave
+const WAVE_DELAY = 10; // 10 seconds from wave start to next wave
 
 // Game state
 let enemies = [];
@@ -219,6 +221,8 @@ class Projectile {
                 enemies = enemies.filter(e => e !== this.target);
                 money += 5;
                 score += 10;
+                enemyDeathSound.currentTime = 0; // Reset to start
+                enemyDeathSound.play(); // Play death sound
             }
             projectiles = projectiles.filter(p => p !== this);
         } else {
@@ -259,7 +263,7 @@ class Tower {
             this.range += 20;
             this.totalCost += 50;
             money -= 50;
-            updateTowerPanel();
+            updateTowerPanel(); // Still updates stats
         }
     }
 
@@ -281,7 +285,7 @@ class Tower {
         if (!gameStarted || gamePaused) return;
 
         if (this.cooldown > 0) this.cooldown--;
-
+        
         let nearestEnemy = null;
         let minDistance = this.range;
         for (let enemy of enemies) {
@@ -298,6 +302,8 @@ class Tower {
             this.angle = Math.atan2(nearestEnemy.y - this.y, nearestEnemy.x - this.x);
             if (this.cooldown === 0) {
                 projectiles.push(new Projectile(this.x, this.y, nearestEnemy, this.damage));
+                turretShootSound.currentTime = 0;
+                turretShootSound.play();
                 this.cooldown = this.fireRate;
             }
         }
@@ -387,14 +393,14 @@ function updateTowerPanel() {
         Total Cost: $${selectedTower.totalCost}<br>
         Sell Value: $${Math.floor(selectedTower.totalCost * 0.6)}
     `;
-    upgradeButton.disabled = selectedTower.level >= 3 || money < 50;
+    // Removed upgradeButton.disabled logic from here
 }
 
 // Game loop
 function gameLoop(timestamp) {
     if (gameOver) {
         ctx.fillStyle = 'black';
-        ctx.font = '20px Arial';
+        ctx.font = '40px Arial';
         ctx.fillText('Game Over!', canvas.width / 2 - 100, canvas.height / 2);
         return;
     }
@@ -459,6 +465,13 @@ function gameLoop(timestamp) {
         startButton.disabled = true;
         nextWaveButton.disabled = true;
         pauseButton.disabled = true;
+    }
+
+    // Update upgrade button state dynamically
+    if (selectedTower) {
+        upgradeButton.disabled = selectedTower.level >= 3 || money < 50;
+    } else {
+        upgradeButton.disabled = true;
     }
 
     // HUD
