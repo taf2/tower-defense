@@ -133,6 +133,17 @@ const TOWER_TYPES = {
     },
 };
 
+// Enemy type definitions
+const ENEMY_TYPES = {
+    normal:  { name: 'Normal',  hpMult: 1.0, speedMult: 1.0, gold: 5,  score: 10, color: { main: '#3a3a4a', dark: '#1a1a2a', accent: '#5a5a70' } },
+    group:   { name: 'Group',   hpMult: 0.4, speedMult: 1.0, gold: 2,  score: 5,  color: { main: '#6a5040', dark: '#3a2820', accent: '#8a7060' }, sizeMult: 0.7 },
+    fast:    { name: 'Fast',    hpMult: 0.6, speedMult: 2.0, gold: 8,  score: 12, color: { main: '#aa4420', dark: '#662200', accent: '#cc6640' } },
+    immune:  { name: 'Immune',  hpMult: 1.3, speedMult: 0.9, gold: 10, score: 15, color: { main: '#2a6a2a', dark: '#104010', accent: '#4a8a4a' }, slowImmune: true },
+    spawn:   { name: 'Spawn',   hpMult: 0.8, speedMult: 0.9, gold: 5,  score: 8,  color: { main: '#aa8a20', dark: '#665510', accent: '#ccaa40' }, spawnsOnDeath: 2 },
+    flying:  { name: 'Flying',  hpMult: 0.7, speedMult: 1.2, gold: 12, score: 15, color: { main: '#4080b0', dark: '#205070', accent: '#60a0d0' }, flying: true },
+    dark:    { name: 'Dark',    hpMult: 1.5, speedMult: 0.7, gold: 15, score: 20, color: { main: '#1a1a1a', dark: '#080808', accent: '#333' }, armor: true },
+};
+
 // Difficulty settings
 const DIFFICULTY_LEVELS = {
     easy: 20,
@@ -158,6 +169,7 @@ let difficulty = 'easy';
 let WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
 let waveJustCleared = false;
 let hoverCell = null;
+let currentWaveType = 'normal';
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -589,9 +601,20 @@ function drawHUD() {
     ctx.fillStyle = '#ff4444';
     ctx.fillText(`Score: ${score}`, 530, y);
 
+    // Wave type indicator
+    if (gameStarted && currentWaveType) {
+        const waveColors = {
+            normal: '#aaaaaa', group: '#8a7060', fast: '#cc6640', immune: '#4a8a4a',
+            spawn: '#ccaa40', flying: '#60a0d0', dark: '#888', boss: '#cc44cc'
+        };
+        const typeName = currentWaveType === 'boss' ? 'BOSS' : ENEMY_TYPES[currentWaveType]?.name || currentWaveType;
+        ctx.fillStyle = waveColors[currentWaveType] || '#aaa';
+        ctx.fillText(typeName, 650, y);
+    }
+
     if (gamePaused && gameStarted) {
         ctx.fillStyle = '#ffff00';
-        ctx.fillText('PAUSED', 700, y);
+        ctx.fillText('PAUSED', 750, y);
     }
 
     ctx.textBaseline = 'alphabetic';
@@ -633,29 +656,92 @@ function drawOverlayMessage(text, subText, color) {
 // Enemy class
 // ==========================================
 class Enemy {
-    constructor(isBoss = false) {
+    constructor(type = 'normal', isBoss = false) {
+        this.type = type;
+        const typeDef = ENEMY_TYPES[type];
         this.spawnDirection = Math.random() < 0.5 ? 'top' : 'left';
         this.start = openings[this.spawnDirection];
         this.goal = openings[this.spawnDirection].goal;
         this.x = this.start.x * GRID_SIZE + GRID_SIZE / 2;
         this.y = this.start.y * GRID_SIZE + GRID_SIZE / 2;
-        this.speed = 1 + Math.floor(level / 5) * 0.2;
-        this.baseSpeed = this.speed;
         this.isBoss = isBoss;
-        this.maxHealth = isBoss ? 500 + level * 50 : 50 + level * 5;
+
+        // HP scales with level and type
+        const baseHP = isBoss ? (500 + level * 50) : (50 + level * 5);
+        this.maxHealth = Math.floor(baseHP * typeDef.hpMult);
         this.health = this.maxHealth;
-        this.size = isBoss ? 40 : 20;
+
+        // Speed scales with level and type
+        this.speed = (1 + Math.floor(level / 5) * 0.2) * typeDef.speedMult;
+        if (isBoss) this.speed *= 0.6;
+        this.baseSpeed = this.speed;
+
+        // Size
+        const baseSize = isBoss ? 40 : 20;
+        this.size = typeDef.sizeMult ? Math.floor(baseSize * typeDef.sizeMult) : baseSize;
+
+        // Rewards
+        this.goldReward = isBoss ? (50 + level * 5) : typeDef.gold;
+        this.scoreReward = isBoss ? (100 + level * 10) : typeDef.score;
+
         this.leakDamage = isBoss ? 5 : 1;
-        this.path = aStar(this.start, this.goal);
         this.angle = 0;
         this.slowTimer = 0;
         this.slowFactor = 0;
-        if (this.path.length === 0) console.log(`Enemy spawned with no path: ${this.spawnDirection}`);
+
+        // Type-specific properties
+        this.slowImmune = typeDef.slowImmune || false;
+        this.armor = typeDef.armor ? Math.floor(2 + level * 0.5) : 0;
+        this.spawnsOnDeath = typeDef.spawnsOnDeath || 0;
+        this.isFlying = typeDef.flying || false;
+        this.isChild = false;
+
+        // Flying enemies go straight to exit, ignoring maze
+        if (this.isFlying) {
+            this.flyTargetX = this.goal.x * GRID_SIZE + GRID_SIZE / 2;
+            this.flyTargetY = this.goal.y * GRID_SIZE + GRID_SIZE / 2;
+            this.path = []; // empty path — uses fly logic
+        } else {
+            this.path = aStar(this.start, this.goal);
+        }
+
+        if (!this.isFlying && this.path.length === 0) console.log(`Enemy spawned with no path: ${this.spawnDirection}`);
     }
 
     update() {
-        if (!gameStarted || gamePaused || this.path.length === 0) {
-            if (this.path.length === 0 && Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < this.speed &&
+        if (!gameStarted || gamePaused) return;
+
+        // Flying enemy movement — straight line to exit
+        if (this.isFlying) {
+            // Handle slow effect (if not immune)
+            if (this.slowTimer > 0 && !this.slowImmune) {
+                this.slowTimer--;
+                this.speed = this.baseSpeed * (1 - this.slowFactor);
+                if (this.slowTimer === 0) {
+                    this.speed = this.baseSpeed;
+                    this.slowFactor = 0;
+                }
+            }
+
+            const dx = this.flyTargetX - this.x;
+            const dy = this.flyTargetY - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < this.speed) {
+                // Reached exit — leak
+                baseHealth -= this.leakDamage;
+                enemies = enemies.filter(e => e !== this);
+                if (baseHealth <= 0) gameOver = true;
+            } else {
+                this.x += (dx / distance) * this.speed;
+                this.y += (dy / distance) * this.speed;
+                this.angle = Math.atan2(dy, dx);
+            }
+            return;
+        }
+
+        // Non-flying path following
+        if (this.path.length === 0) {
+            if (Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < this.speed &&
                 Math.abs(this.y - this.goal.y * GRID_SIZE - GRID_SIZE / 2) < this.speed) {
                 baseHealth -= this.leakDamage;
                 enemies = enemies.filter(e => e !== this);
@@ -664,8 +750,8 @@ class Enemy {
             return;
         }
 
-        // Handle slow effect
-        if (this.slowTimer > 0) {
+        // Handle slow effect (skip if slow immune)
+        if (this.slowTimer > 0 && !this.slowImmune) {
             this.slowTimer--;
             this.speed = this.baseSpeed * (1 - this.slowFactor);
             if (this.slowTimer === 0) {
@@ -698,6 +784,7 @@ class Enemy {
         const fwdY = Math.sin(this.angle);
         const perpX = -Math.sin(this.angle);
         const perpY = Math.cos(this.angle);
+        const typeDef = ENEMY_TYPES[this.type];
 
         // Drop shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
@@ -705,34 +792,82 @@ class Enemy {
         ctx.arc(this.x + 1, this.y + 1, r + 1, 0, Math.PI * 2);
         ctx.fill();
 
-        // Body colors
+        // Body colors — boss gets purple overlay, otherwise type colors
         let mainColor, darkColor, accentColor;
         if (this.isBoss) {
             mainColor = '#4a2060';
             darkColor = '#2a1040';
             accentColor = '#7050a0';
         } else {
-            mainColor = '#3a3a4a';
-            darkColor = '#1a1a2a';
-            accentColor = '#5a5a70';
+            mainColor = typeDef.color.main;
+            darkColor = typeDef.color.dark;
+            accentColor = typeDef.color.accent;
         }
 
-        // Legs
-        ctx.strokeStyle = darkColor;
-        ctx.lineWidth = 1;
-        for (let i = -1; i <= 1; i++) {
+        // Flying wings (drawn behind body)
+        if (this.isFlying) {
+            const wingPhase = Date.now() * 0.008;
+            const wingFlap = Math.sin(wingPhase) * 0.3;
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#80c8e8';
             for (let side of [-1, 1]) {
-                const legAngle = this.angle + (Math.PI / 2) * side + i * 0.5;
-                const bx = this.x + Math.cos(legAngle) * r * 0.3;
-                const by = this.y + Math.sin(legAngle) * r * 0.3;
                 ctx.beginPath();
-                ctx.moveTo(bx, by);
-                ctx.lineTo(bx + Math.cos(legAngle) * r * 0.45, by + Math.sin(legAngle) * r * 0.45);
-                ctx.stroke();
+                const wx = this.x + perpX * side * r * 0.3;
+                const wy = this.y + perpY * side * r * 0.3;
+                const wingAngle = this.angle + (Math.PI / 2) * side + wingFlap * side;
+                const wingLen = r * 1.4;
+                const wingTipX = wx + Math.cos(wingAngle) * wingLen;
+                const wingTipY = wy + Math.sin(wingAngle) * wingLen;
+                ctx.moveTo(wx + fwdX * r * 0.3, wy + fwdY * r * 0.3);
+                ctx.quadraticCurveTo(wingTipX, wingTipY,
+                    wx - fwdX * r * 0.3, wy - fwdY * r * 0.3);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // Dark armor ring (drawn behind body)
+        if (this.type === 'dark' && !this.isBoss) {
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r + 2, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r + 3.5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // Legs (skip for flying)
+        if (!this.isFlying) {
+            ctx.strokeStyle = darkColor;
+            ctx.lineWidth = 1;
+            for (let i = -1; i <= 1; i++) {
+                for (let side of [-1, 1]) {
+                    const legAngle = this.angle + (Math.PI / 2) * side + i * 0.5;
+                    const bx = this.x + Math.cos(legAngle) * r * 0.3;
+                    const by = this.y + Math.sin(legAngle) * r * 0.3;
+                    ctx.beginPath();
+                    ctx.moveTo(bx, by);
+                    ctx.lineTo(bx + Math.cos(legAngle) * r * 0.45, by + Math.sin(legAngle) * r * 0.45);
+                    ctx.stroke();
+                }
             }
         }
 
-        // Body
+        // Spawn pulsing glow
+        if (this.type === 'spawn' && !this.isBoss) {
+            const pulse = 0.15 + Math.sin(Date.now() * 0.006) * 0.1;
+            ctx.fillStyle = `rgba(200, 170, 50, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r + 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Body — Fast type gets elongated oval
         const grad = ctx.createRadialGradient(
             this.x - r * 0.2, this.y - r * 0.2, r * 0.1,
             this.x, this.y, r
@@ -742,7 +877,17 @@ class Enemy {
         grad.addColorStop(1, darkColor);
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+        if (this.type === 'fast' && !this.isBoss) {
+            // Elongated oval for fast enemies
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            ctx.scale(1.3, 0.8);
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.restore();
+        } else {
+            ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+        }
         ctx.fill();
         ctx.strokeStyle = darkColor;
         ctx.lineWidth = 1.5;
@@ -755,6 +900,38 @@ class Enemy {
         ctx.moveTo(this.x + perpX * r * 0.7, this.y + perpY * r * 0.7);
         ctx.lineTo(this.x - perpX * r * 0.7, this.y - perpY * r * 0.7);
         ctx.stroke();
+
+        // Immune spiky outline
+        if (this.type === 'immune' && !this.isBoss) {
+            ctx.fillStyle = '#4a8a4a';
+            const spikeCount = 8;
+            for (let i = 0; i < spikeCount; i++) {
+                const sAngle = (i / spikeCount) * Math.PI * 2;
+                const sx = this.x + Math.cos(sAngle) * (r + 1);
+                const sy = this.y + Math.sin(sAngle) * (r + 1);
+                ctx.beginPath();
+                ctx.moveTo(sx + Math.cos(sAngle) * 3, sy + Math.sin(sAngle) * 3);
+                ctx.lineTo(sx + Math.cos(sAngle + 0.4) * 1.5, sy + Math.sin(sAngle + 0.4) * 1.5);
+                ctx.lineTo(sx + Math.cos(sAngle - 0.4) * 1.5, sy + Math.sin(sAngle - 0.4) * 1.5);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        // Fast speed lines
+        if (this.type === 'fast' && !this.isBoss) {
+            ctx.strokeStyle = 'rgba(255, 100, 50, 0.3)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+                const offset = (i - 1) * r * 0.4;
+                const sx = this.x - fwdX * r * 1.2 + perpX * offset;
+                const sy = this.y - fwdY * r * 1.2 + perpY * offset;
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(sx - fwdX * r * 0.6, sy - fwdY * r * 0.6);
+                ctx.stroke();
+            }
+        }
 
         // Slow indicator (blue tint)
         if (this.slowTimer > 0) {
@@ -881,25 +1058,33 @@ class Projectile {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < this.speed) {
+            // Apply armor damage reduction
+            const actualDamage = this.target.armor > 0
+                ? Math.max(1, this.damage - this.target.armor)
+                : this.damage;
+
             // Primary hit
-            this.target.health -= this.damage;
+            this.target.health -= actualDamage;
 
             // Splash damage (Squirt)
             if (this.type === 'squirt' && this.splashRadius > 0) {
-                const splashDamage = Math.floor(this.damage * 0.5);
+                const baseSplash = Math.floor(this.damage * 0.5);
                 for (let enemy of enemies) {
                     if (enemy === this.target) continue;
                     const sdx = enemy.x - this.target.x;
                     const sdy = enemy.y - this.target.y;
                     const sdist = Math.sqrt(sdx * sdx + sdy * sdy);
                     if (sdist <= this.splashRadius) {
-                        enemy.health -= splashDamage;
+                        const splashActual = enemy.armor > 0
+                            ? Math.max(1, baseSplash - enemy.armor)
+                            : baseSplash;
+                        enemy.health -= splashActual;
                     }
                 }
             }
 
-            // Slow effect (Frost)
-            if (this.type === 'frost' && this.target.health > 0) {
+            // Slow effect (Frost) — skip if target is slow immune
+            if (this.type === 'frost' && this.target.health > 0 && !this.target.slowImmune) {
                 if (!this.target.slowTimer || this.target.slowFactor < this.slowFactor) {
                     this.target.slowFactor = this.slowFactor;
                 }
@@ -910,8 +1095,39 @@ class Projectile {
             const deadEnemies = enemies.filter(e => e.health <= 0);
             if (deadEnemies.length > 0) {
                 enemies = enemies.filter(e => e.health > 0);
-                money += deadEnemies.length * 5;
-                score += deadEnemies.length * 10;
+                for (const dead of deadEnemies) {
+                    money += dead.goldReward;
+                    score += dead.scoreReward;
+
+                    // Spawn children on death
+                    if (dead.spawnsOnDeath > 0 && !dead.isChild) {
+                        for (let i = 0; i < dead.spawnsOnDeath; i++) {
+                            const child = new Enemy(dead.type, false);
+                            child.isChild = true;
+                            child.spawnsOnDeath = 0;
+                            child.x = dead.x + (Math.random() - 0.5) * 10;
+                            child.y = dead.y + (Math.random() - 0.5) * 10;
+                            child.maxHealth = Math.floor(dead.maxHealth * 0.4);
+                            child.health = child.maxHealth;
+                            child.size = Math.floor(dead.size * 0.7);
+                            child.goldReward = 3;
+                            child.scoreReward = 3;
+                            child.goal = dead.goal;
+                            // Pathfind from parent's current grid position
+                            const gx = Math.floor(dead.x / GRID_SIZE);
+                            const gy = Math.floor(dead.y / GRID_SIZE);
+                            child.path = aStar({ x: gx, y: gy }, dead.goal);
+                            if (child.path.length === 0) {
+                                // Fallback: try from nearby cells
+                                for (let [ox, oy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+                                    child.path = aStar({ x: gx+ox, y: gy+oy }, dead.goal);
+                                    if (child.path.length > 0) break;
+                                }
+                            }
+                            enemies.push(child);
+                        }
+                    }
+                }
                 enemyDeathSound.currentTime = 0;
                 enemyDeathSound.play();
             }
@@ -1056,6 +1272,7 @@ class Tower {
         selectedTower = null;
         towerPanel.style.display = 'none';
         enemies.forEach(e => {
+            if (e.isFlying) return;
             const currentGridX = Math.floor(e.x / GRID_SIZE);
             const currentGridY = Math.floor(e.y / GRID_SIZE);
             e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
@@ -1330,17 +1547,51 @@ class Tower {
     }
 }
 
+// Determine wave enemy type based on level
+function getWaveType(lvl) {
+    if (lvl % 10 === 0) return 'boss';
+    if (lvl <= 5) return 'normal';
+    // Fixed introduction schedule
+    const introWaves = { 6: 'group', 7: 'fast', 8: 'normal', 9: 'immune',
+        11: 'group', 12: 'fast', 13: 'spawn', 14: 'dark', 15: 'flying',
+        16: 'normal', 17: 'group', 18: 'fast', 19: 'immune' };
+    if (introWaves[lvl]) return introWaves[lvl];
+    // Rotating types for waves 21+
+    const rotation = ['normal', 'group', 'fast', 'immune', 'spawn', 'flying', 'dark'];
+    return rotation[(lvl - 21) % rotation.length];
+}
+
+// Get enemy count for wave type and level
+function getWaveCount(type, lvl) {
+    switch (type) {
+        case 'group': return 12 + Math.floor(lvl / 5);
+        case 'fast':  return 4 + Math.floor(lvl / 10);
+        default:      return 5 + Math.floor(lvl / 10);
+    }
+}
+
 // Wave spawning function
 function spawnWave() {
     if (gameOver || !gameStarted) return;
     waveTimer = WAVE_DELAY;
     waveJustCleared = false;
 
-    if (level % 10 === 0) {
-        enemies.push(new Enemy(true));
+    const waveType = getWaveType(level);
+    currentWaveType = waveType;
+
+    if (waveType === 'boss') {
+        // Boss gets a random type trait
+        const bossTypes = ['normal', 'fast', 'immune', 'spawn', 'dark', 'flying'];
+        const bossVariant = bossTypes[Math.floor(Math.random() * bossTypes.length)];
+        currentWaveType = 'boss';
+        enemies.push(new Enemy(bossVariant, true));
     } else {
-        for (let i = 0; i < 5; i++) {
-            setTimeout(() => enemies.push(new Enemy()), i * 500);
+        const count = getWaveCount(waveType, level);
+        const spawnDelay = waveType === 'group' ? 300 : 500;
+        for (let i = 0; i < count; i++) {
+            setTimeout(() => {
+                if (!gameOver) enemies.push(new Enemy(waveType, false));
+            }, i * spawnDelay);
         }
     }
     level++;
@@ -1363,6 +1614,7 @@ function resetGame() {
     difficulty = difficultySelect.value;
     WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
     waveJustCleared = false;
+    currentWaveType = 'normal';
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
     for (let x = 0; x < COLS; x++) {
         if (x !== topOpening) grid[0][x] = 1;
@@ -1551,6 +1803,7 @@ canvas.addEventListener('click', (e) => {
         towers.push(new Tower(x, y, selectedTowerType));
         money -= placeCost;
         enemies.forEach(e => {
+            if (e.isFlying) return;
             const currentGridX = Math.floor(e.x / GRID_SIZE);
             const currentGridY = Math.floor(e.y / GRID_SIZE);
             e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
