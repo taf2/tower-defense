@@ -21,6 +21,7 @@ const towerSounds = {
     dart:   document.getElementById('sound-dart'),
     swarm:  document.getElementById('sound-swarm'),
     frost:  document.getElementById('sound-frost'),
+    bash:   document.getElementById('sound-bash'),
 };
 const towerTypeButtons = document.querySelectorAll('.tower-type-btn');
 
@@ -28,21 +29,26 @@ const towerTypeButtons = document.querySelectorAll('.tower-type-btn');
 const GRID_SIZE = 40;
 const COLS = Math.floor(canvas.width / GRID_SIZE);
 const ROWS = Math.floor(canvas.height / GRID_SIZE);
+const MAX_TOWER_LEVEL = 6;
 
 // Tower type definitions
 const TOWER_TYPES = {
     pellet: {
         name: 'Pellet',
+        evolutionName: 'Sniper',
         description: 'Fast, cheap basic tower',
         cost: 30,
         levels: [
-            { damage: 5,  range: 80,  fireRate: 30, upgradeCost: 0  },
-            { damage: 10, range: 90,  fireRate: 25, upgradeCost: 25 },
-            { damage: 18, range: 100, fireRate: 20, upgradeCost: 40 },
+            { damage: 5,   range: 80,  fireRate: 30, upgradeCost: 0   },
+            { damage: 10,  range: 90,  fireRate: 25, upgradeCost: 25  },
+            { damage: 18,  range: 100, fireRate: 20, upgradeCost: 40  },
+            { damage: 30,  range: 110, fireRate: 18, upgradeCost: 65  },
+            { damage: 50,  range: 120, fireRate: 15, upgradeCost: 100 },
+            { damage: 120, range: 200, fireRate: 50, upgradeCost: 200 },
         ],
         colors: {
-            ring: ['#5a8a3a', '#8ab030', '#b0d040'],
-            dark: ['#3a6a2a', '#6a8a20', '#8ab028'],
+            ring: ['#5a8a3a', '#8ab030', '#b0d040', '#c8e050', '#d8f060', '#ffe880'],
+            dark: ['#3a6a2a', '#6a8a20', '#8ab028', '#a0c030', '#b8d838', '#d4c040'],
         },
         barrelColor: '#4a7a3a',
         projectileColor: '#8ab030',
@@ -53,16 +59,20 @@ const TOWER_TYPES = {
     },
     squirt: {
         name: 'Squirt',
+        evolutionName: 'Typhoon',
         description: 'Splash damage in an area',
         cost: 80,
         levels: [
-            { damage: 8,  range: 90,  fireRate: 50, upgradeCost: 0  },
-            { damage: 15, range: 100, fireRate: 45, upgradeCost: 60 },
-            { damage: 25, range: 115, fireRate: 40, upgradeCost: 90 },
+            { damage: 8,  range: 90,  fireRate: 50, upgradeCost: 0   },
+            { damage: 15, range: 100, fireRate: 45, upgradeCost: 60  },
+            { damage: 25, range: 115, fireRate: 40, upgradeCost: 90  },
+            { damage: 38, range: 120, fireRate: 35, upgradeCost: 130 },
+            { damage: 55, range: 130, fireRate: 30, upgradeCost: 180 },
+            { damage: 90, range: 150, fireRate: 25, splashRadius: 60, upgradeCost: 350 },
         ],
         colors: {
-            ring: ['#2a6a9a', '#3080b0', '#40a0d0'],
-            dark: ['#1a4a7a', '#206090', '#3080a8'],
+            ring: ['#2a6a9a', '#3080b0', '#40a0d0', '#50b8e0', '#60d0f0', '#90e8ff'],
+            dark: ['#1a4a7a', '#206090', '#3080a8', '#3898c0', '#48b0d8', '#70c8e0'],
         },
         barrelColor: '#2a6a9a',
         projectileColor: '#40a0d0',
@@ -73,16 +83,20 @@ const TOWER_TYPES = {
     },
     dart: {
         name: 'Dart',
+        evolutionName: 'ICBM',
         description: 'Slow, powerful, long range',
         cost: 100,
         levels: [
-            { damage: 25, range: 140, fireRate: 90, upgradeCost: 0   },
-            { damage: 45, range: 170, fireRate: 80, upgradeCost: 80  },
-            { damage: 75, range: 200, fireRate: 70, upgradeCost: 120 },
+            { damage: 25,  range: 140, fireRate: 90,  upgradeCost: 0   },
+            { damage: 45,  range: 170, fireRate: 80,  upgradeCost: 80  },
+            { damage: 75,  range: 200, fireRate: 70,  upgradeCost: 120 },
+            { damage: 110, range: 220, fireRate: 65,  upgradeCost: 175 },
+            { damage: 160, range: 240, fireRate: 60,  upgradeCost: 250 },
+            { damage: 350, range: 300, fireRate: 100, upgradeCost: 500 },
         ],
         colors: {
-            ring: ['#aa5030', '#cc6030', '#ee7040'],
-            dark: ['#883820', '#aa4820', '#cc5828'],
+            ring: ['#aa5030', '#cc6030', '#ee7040', '#ff8850', '#ffa060', '#ffd080'],
+            dark: ['#883820', '#aa4820', '#cc5828', '#dd6830', '#ee7838', '#d4a040'],
         },
         barrelColor: '#aa5030',
         projectileColor: '#ff6600',
@@ -93,16 +107,20 @@ const TOWER_TYPES = {
     },
     swarm: {
         name: 'Swarm',
-        description: 'Fires at multiple targets',
+        evolutionName: 'Storm',
+        description: 'Anti-air, fires missiles at flyers',
         cost: 120,
         levels: [
             { damage: 6,  range: 100, fireRate: 50, targets: 2, upgradeCost: 0   },
             { damage: 10, range: 110, fireRate: 45, targets: 3, upgradeCost: 90  },
             { damage: 15, range: 120, fireRate: 40, targets: 4, upgradeCost: 130 },
+            { damage: 22, range: 130, fireRate: 35, targets: 5, upgradeCost: 190 },
+            { damage: 30, range: 140, fireRate: 30, targets: 6, upgradeCost: 270 },
+            { damage: 50, range: 160, fireRate: 25, targets: 8, upgradeCost: 450 },
         ],
         colors: {
-            ring: ['#8a5aa0', '#a070b8', '#b888d0'],
-            dark: ['#6a3a80', '#805098', '#9868b0'],
+            ring: ['#8a5aa0', '#a070b8', '#b888d0', '#c898e0', '#d8a8f0', '#f0d0ff'],
+            dark: ['#6a3a80', '#805098', '#9868b0', '#a878c8', '#b888d8', '#d0a8e0'],
         },
         barrelColor: '#8a5aa0',
         projectileColor: '#b888d0',
@@ -113,16 +131,20 @@ const TOWER_TYPES = {
     },
     frost: {
         name: 'Frost',
+        evolutionName: 'Blizzard',
         description: 'Slows enemies, low damage',
         cost: 60,
         levels: [
-            { damage: 3,  range: 90,  fireRate: 45, slowFactor: 0.4, slowDuration: 90,  upgradeCost: 0  },
-            { damage: 5,  range: 105, fireRate: 40, slowFactor: 0.5, slowDuration: 120, upgradeCost: 50 },
-            { damage: 8,  range: 120, fireRate: 35, slowFactor: 0.6, slowDuration: 150, upgradeCost: 75 },
+            { damage: 3,  range: 90,  fireRate: 45, slowFactor: 0.4,  slowDuration: 90,  upgradeCost: 0   },
+            { damage: 5,  range: 105, fireRate: 40, slowFactor: 0.5,  slowDuration: 120, upgradeCost: 50  },
+            { damage: 8,  range: 120, fireRate: 35, slowFactor: 0.6,  slowDuration: 150, upgradeCost: 75  },
+            { damage: 12, range: 130, fireRate: 30, slowFactor: 0.65, slowDuration: 170, upgradeCost: 110 },
+            { damage: 18, range: 140, fireRate: 25, slowFactor: 0.70, slowDuration: 200, upgradeCost: 160 },
+            { damage: 30, range: 160, fireRate: 20, slowFactor: 0.80, slowDuration: 250, upgradeCost: 300 },
         ],
         colors: {
-            ring: ['#50a0b0', '#60c0d8', '#80e0f0'],
-            dark: ['#3080a0', '#40a0b8', '#50c0d0'],
+            ring: ['#50a0b0', '#60c0d8', '#80e0f0', '#90e8f8', '#a0f0ff', '#d0ffff'],
+            dark: ['#3080a0', '#40a0b8', '#50c0d0', '#60d0e0', '#70e0f0', '#a0e8f0'],
         },
         barrelColor: '#50a0b0',
         projectileColor: '#80e0f0',
@@ -130,6 +152,31 @@ const TOWER_TYPES = {
         barrelStyle: 'cone',
         splashRadius: 0,
         multiTarget: false,
+    },
+    bash: {
+        name: 'Bash',
+        evolutionName: 'Quake',
+        description: 'Melee AoE, chance to stun',
+        cost: 90,
+        levels: [
+            { damage: 12,  range: 50, fireRate: 40, stunChance: 0.15, stunDuration: 30,  upgradeCost: 0   },
+            { damage: 22,  range: 55, fireRate: 35, stunChance: 0.20, stunDuration: 45,  upgradeCost: 70  },
+            { damage: 35,  range: 60, fireRate: 30, stunChance: 0.25, stunDuration: 60,  upgradeCost: 100 },
+            { damage: 50,  range: 65, fireRate: 28, stunChance: 0.30, stunDuration: 70,  upgradeCost: 150 },
+            { damage: 70,  range: 70, fireRate: 25, stunChance: 0.35, stunDuration: 80,  upgradeCost: 220 },
+            { damage: 120, range: 80, fireRate: 20, stunChance: 0.50, stunDuration: 120, upgradeCost: 400 },
+        ],
+        colors: {
+            ring: ['#a07030', '#c08838', '#e0a040', '#e8b050', '#f0c060', '#ffe080'],
+            dark: ['#705020', '#906828', '#b08030', '#c09038', '#d0a040', '#d4b048'],
+        },
+        barrelColor: '#a07030',
+        projectileColor: '#e0a040',
+        projectileSpeed: 0,
+        barrelStyle: 'bash',
+        splashRadius: 0,
+        multiTarget: false,
+        melee: true,
     },
 };
 
@@ -170,6 +217,9 @@ let WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
 let waveJustCleared = false;
 let hoverCell = null;
 let currentWaveType = 'normal';
+let selectedEnemy = null;
+let floatingTexts = [];
+let hoverPreviewType = null;
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -652,6 +702,145 @@ function drawOverlayMessage(text, subText, color) {
     ctx.textAlign = 'start';
 }
 
+// Draw selected enemy info tooltip
+function drawEnemyInfo() {
+    if (!selectedEnemy || !enemies.includes(selectedEnemy)) {
+        selectedEnemy = null;
+        return;
+    }
+    const e = selectedEnemy;
+    const typeDef = ENEMY_TYPES[e.type];
+    const hp = e.health;
+    const maxHp = e.maxHealth;
+    const pct = Math.round((hp / maxHp) * 100);
+
+    const label = e.isBoss ? `Boss (${typeDef.name})` : typeDef.name;
+    const line1 = label;
+    const line2 = `HP: ${Math.ceil(hp)} / ${maxHp} (${pct}%)`;
+    const line3 = `Gold: ${e.goldReward}` + (e.armor > 0 ? ` | Armor: ${e.armor}` : '') +
+                  (e.slowImmune ? ' | Immune' : '');
+
+    ctx.font = 'bold 11px Arial, sans-serif';
+    const w1 = ctx.measureText(line1).width;
+    ctx.font = '10px Arial, sans-serif';
+    const w2 = ctx.measureText(line2).width;
+    const w3 = ctx.measureText(line3).width;
+    const boxW = Math.max(w1, w2, w3) + 16;
+    const boxH = 44;
+
+    let bx = e.x - boxW / 2;
+    let by = e.y - e.size / 2 - boxH - 14;
+    // Keep on screen
+    if (bx < 2) bx = 2;
+    if (bx + boxW > canvas.width - 2) bx = canvas.width - boxW - 2;
+    if (by < 28) by = e.y + e.size / 2 + 8;
+
+    ctx.fillStyle = 'rgba(10, 10, 20, 0.9)';
+    drawRoundedRect(bx, by, boxW, boxH, 4);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    drawRoundedRect(bx, by, boxW, boxH, 4);
+    ctx.stroke();
+
+    const waveColors = {
+        normal: '#aaaaaa', group: '#8a7060', fast: '#cc6640', immune: '#4a8a4a',
+        spawn: '#ccaa40', flying: '#60a0d0', dark: '#888'
+    };
+    ctx.fillStyle = e.isBoss ? '#cc44cc' : (waveColors[e.type] || '#ccc');
+    ctx.font = 'bold 11px Arial, sans-serif';
+    ctx.fillText(line1, bx + 8, by + 13);
+
+    ctx.fillStyle = '#ccc';
+    ctx.font = '10px Arial, sans-serif';
+    ctx.fillText(line2, bx + 8, by + 26);
+    ctx.fillStyle = '#aaa';
+    ctx.fillText(line3, bx + 8, by + 39);
+}
+
+// Floating text system
+function updateFloatingTexts() {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.y -= 0.8;
+        ft.life--;
+        if (ft.life <= 0) {
+            floatingTexts.splice(i, 1);
+        }
+    }
+}
+
+function drawFloatingTexts() {
+    for (const ft of floatingTexts) {
+        const alpha = Math.min(1, ft.life / 30);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 12px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.textAlign = 'start';
+    }
+    ctx.globalAlpha = 1;
+}
+
+// Draw wave schedule bar at bottom
+function drawWaveBar() {
+    if (!gameStarted) return;
+    const barH = 32;
+    const barY = canvas.height - barH;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, barY, canvas.width, barH);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.fillRect(0, barY, canvas.width, 1);
+
+    const waveColors = {
+        normal: '#999', group: '#7a9060', fast: '#dd7750', immune: '#5a9a5a',
+        spawn: '#ddbb50', flying: '#70b0e0', dark: '#777', boss: '#cc55cc'
+    };
+    const waveBg = {
+        normal: '#444', group: '#3a4a30', fast: '#663320', immune: '#254525',
+        spawn: '#665520', flying: '#304860', dark: '#222', boss: '#552255'
+    };
+
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+
+    const startWave = Math.max(1, level - 2);
+    let xPos = 6;
+    for (let w = startWave; w < Math.min(startWave + 16, 101); w++) {
+        const wType = getWaveType(w);
+        const label = wType === 'boss' ? 'BOSS' : ENEMY_TYPES[wType]?.name.toUpperCase() || wType.toUpperCase();
+        const tw = ctx.measureText(label).width + 14;
+
+        // Highlight current wave
+        const isCurrent = w === level - 1;
+
+        ctx.fillStyle = waveBg[wType] || '#333';
+        if (isCurrent) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        }
+        drawRoundedRect(xPos, barY + 3, tw, barH - 6, 4);
+        ctx.fill();
+
+        // Wave number small text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = '9px Arial, sans-serif';
+        ctx.fillText(`${w}`, xPos + 3, barY + 9);
+
+        // Wave type label
+        ctx.font = 'bold 13px Arial, sans-serif';
+        ctx.fillStyle = waveColors[wType] || '#999';
+        if (isCurrent) {
+            ctx.fillStyle = '#fff';
+        }
+        ctx.fillText(label, xPos + 7, barY + barH / 2 + 3);
+
+        xPos += tw + 3;
+        if (xPos > canvas.width - 10) break;
+    }
+    ctx.textBaseline = 'alphabetic';
+}
+
 // ==========================================
 // Enemy class
 // ==========================================
@@ -671,8 +860,8 @@ class Enemy {
         this.maxHealth = Math.floor(baseHP * typeDef.hpMult);
         this.health = this.maxHealth;
 
-        // Speed scales with level and type
-        this.speed = (1 + Math.floor(level / 5) * 0.2) * typeDef.speedMult;
+        // Speed scales with level and type (capped so enemies can't outrun projectiles)
+        this.speed = (1 + Math.min(Math.floor(level / 5) * 0.2, 1.5)) * typeDef.speedMult;
         if (isBoss) this.speed *= 0.6;
         this.baseSpeed = this.speed;
 
@@ -688,6 +877,7 @@ class Enemy {
         this.angle = 0;
         this.slowTimer = 0;
         this.slowFactor = 0;
+        this.stunTimer = 0;
 
         // Type-specific properties
         this.slowImmune = typeDef.slowImmune || false;
@@ -710,6 +900,12 @@ class Enemy {
 
     update() {
         if (!gameStarted || gamePaused) return;
+
+        // Stun: skip all movement
+        if (this.stunTimer > 0) {
+            this.stunTimer--;
+            return;
+        }
 
         // Flying enemy movement — straight line to exit
         if (this.isFlying) {
@@ -786,12 +982,6 @@ class Enemy {
         const perpY = Math.cos(this.angle);
         const typeDef = ENEMY_TYPES[this.type];
 
-        // Drop shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        ctx.beginPath();
-        ctx.arc(this.x + 1, this.y + 1, r + 1, 0, Math.PI * 2);
-        ctx.fill();
-
         // Body colors — boss gets purple overlay, otherwise type colors
         let mainColor, darkColor, accentColor;
         if (this.isBoss) {
@@ -804,28 +994,124 @@ class Enemy {
             accentColor = typeDef.color.accent;
         }
 
-        // Flying wings (drawn behind body)
+        // Flying enemies — draw as directional triangle
         if (this.isFlying) {
-            const wingPhase = Date.now() * 0.008;
-            const wingFlap = Math.sin(wingPhase) * 0.3;
-            ctx.save();
-            ctx.globalAlpha = 0.4;
-            ctx.fillStyle = '#80c8e8';
-            for (let side of [-1, 1]) {
+            const triLen = r * 1.3;
+            const triW = r * 0.9;
+            // Nose
+            const nx = this.x + fwdX * triLen;
+            const ny = this.y + fwdY * triLen;
+            // Left tail
+            const lx = this.x - fwdX * triLen * 0.6 + perpX * triW;
+            const ly = this.y - fwdY * triLen * 0.6 + perpY * triW;
+            // Right tail
+            const rx = this.x - fwdX * triLen * 0.6 - perpX * triW;
+            const ry = this.y - fwdY * triLen * 0.6 - perpY * triW;
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.beginPath();
+            ctx.moveTo(nx + 1, ny + 1);
+            ctx.lineTo(lx + 1, ly + 1);
+            ctx.lineTo(rx + 1, ry + 1);
+            ctx.closePath();
+            ctx.fill();
+
+            // Body fill
+            const grad = ctx.createLinearGradient(
+                this.x - fwdX * triLen * 0.6, this.y - fwdY * triLen * 0.6,
+                nx, ny
+            );
+            grad.addColorStop(0, darkColor);
+            grad.addColorStop(0.5, mainColor);
+            grad.addColorStop(1, accentColor);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(lx, ly);
+            ctx.lineTo(rx, ry);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = darkColor;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            // Center line
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(nx, ny);
+            ctx.lineTo(this.x - fwdX * triLen * 0.6, this.y - fwdY * triLen * 0.6);
+            ctx.stroke();
+
+            // Slow indicator
+            if (this.slowTimer > 0) {
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.25)';
                 ctx.beginPath();
-                const wx = this.x + perpX * side * r * 0.3;
-                const wy = this.y + perpY * side * r * 0.3;
-                const wingAngle = this.angle + (Math.PI / 2) * side + wingFlap * side;
-                const wingLen = r * 1.4;
-                const wingTipX = wx + Math.cos(wingAngle) * wingLen;
-                const wingTipY = wy + Math.sin(wingAngle) * wingLen;
-                ctx.moveTo(wx + fwdX * r * 0.3, wy + fwdY * r * 0.3);
-                ctx.quadraticCurveTo(wingTipX, wingTipY,
-                    wx - fwdX * r * 0.3, wy - fwdY * r * 0.3);
+                ctx.moveTo(nx, ny);
+                ctx.lineTo(lx - perpX * 2, ly - perpY * 2);
+                ctx.lineTo(rx + perpX * 2, ry + perpY * 2);
+                ctx.closePath();
                 ctx.fill();
             }
-            ctx.restore();
+
+            // Selected highlight
+            if (this === selectedEnemy) {
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, r + 4, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // Health bar
+            const hbW = this.size + 4;
+            const hbH = 3;
+            const hbX = this.x - hbW / 2;
+            const hbY = this.y - r - 10;
+            const hp = this.health / this.maxHealth;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(hbX, hbY, hbW, hbH);
+            if (hp > 0) {
+                ctx.fillStyle = hp > 0.5 ? '#44aa44' : hp > 0.25 ? '#ddaa44' : '#dd4444';
+                ctx.fillRect(hbX, hbY, hbW * hp, hbH);
+            }
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.lineWidth = 0.5;
+            ctx.strokeRect(hbX, hbY, hbW, hbH);
+
+            if (this.slowTimer > 0) {
+                ctx.fillStyle = '#80e0f0';
+                ctx.font = '9px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('*', this.x, hbY - 2);
+                ctx.textAlign = 'start';
+            }
+
+            // Stun indicator for flying enemies
+            if (this.stunTimer > 0) {
+                const starCount = 3;
+                const orbit = r + 6;
+                const spin = Date.now() * 0.005;
+                ctx.fillStyle = '#ffe040';
+                ctx.font = 'bold 9px Arial';
+                ctx.textAlign = 'center';
+                for (let i = 0; i < starCount; i++) {
+                    const sa = spin + (i / starCount) * Math.PI * 2;
+                    const sx = this.x + Math.cos(sa) * orbit;
+                    const sy = this.y - r * 0.3 + Math.sin(sa) * (orbit * 0.4);
+                    ctx.fillText('\u2729', sx, sy);
+                }
+                ctx.textAlign = 'start';
+            }
+            return; // Flying enemies use triangle, skip bug drawing
         }
+
+        // Drop shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.beginPath();
+        ctx.arc(this.x + 1, this.y + 1, r + 1, 0, Math.PI * 2);
+        ctx.fill();
 
         // Dark armor ring (drawn behind body)
         if (this.type === 'dark' && !this.isBoss) {
@@ -992,6 +1278,15 @@ class Enemy {
             }
         }
 
+        // Selected enemy highlight
+        if (this === selectedEnemy) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, r + 4, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
         // Health bar
         const hbW = this.size + 4;
         const hbH = 3;
@@ -1019,6 +1314,23 @@ class Enemy {
             ctx.fillText('*', this.x, hbY - 2);
             ctx.textAlign = 'start';
         }
+
+        // Stun indicator — spinning stars
+        if (this.stunTimer > 0) {
+            const starCount = 3;
+            const orbit = r + 6;
+            const spin = Date.now() * 0.005;
+            ctx.fillStyle = '#ffe040';
+            ctx.font = 'bold 9px Arial';
+            ctx.textAlign = 'center';
+            for (let i = 0; i < starCount; i++) {
+                const sa = spin + (i / starCount) * Math.PI * 2;
+                const sx = this.x + Math.cos(sa) * orbit;
+                const sy = this.y - r * 0.3 + Math.sin(sa) * (orbit * 0.4);
+                ctx.fillText('\u2729', sx, sy);
+            }
+            ctx.textAlign = 'start';
+        }
     }
 }
 
@@ -1039,7 +1351,7 @@ class Projectile {
         this.color = typeDef.projectileColor;
         this.splashRadius = typeDef.splashRadius;
 
-        // Frost slow properties (set by tower after creation)
+        // Frost slow properties, splash override (set by tower after creation)
         this.slowFactor = 0;
         this.slowDuration = 0;
     }
@@ -1098,6 +1410,13 @@ class Projectile {
                 for (const dead of deadEnemies) {
                     money += dead.goldReward;
                     score += dead.scoreReward;
+
+                    // Floating gold text
+                    floatingTexts.push({
+                        x: dead.x, y: dead.y - 10,
+                        text: `+${dead.goldReward}`,
+                        color: '#ffcc00', life: 50
+                    });
 
                     // Spawn children on death
                     if (dead.spawnsOnDeath > 0 && !dead.isChild) {
@@ -1245,22 +1564,42 @@ class Tower {
         this.level = 1;
         this.angle = 0;
         this.totalCost = typeDef.cost;
+        this.upgradeTimer = 0;
+        this.upgradeTotal = 0;
+        this.pendingLevel = null;
         grid[this.gridY][this.gridX] = 1;
     }
 
     upgrade() {
         const typeDef = TOWER_TYPES[this.type];
-        if (this.level >= 3) return;
+        if (this.level >= MAX_TOWER_LEVEL) return;
+        if (this.upgradeTimer > 0) return; // already upgrading
         const nextLevel = typeDef.levels[this.level];
         const upgradeCost = nextLevel.upgradeCost;
         if (money < upgradeCost) return;
 
-        this.level++;
-        this.damage = nextLevel.damage;
-        this.range = nextLevel.range;
-        this.fireRate = nextLevel.fireRate;
-        this.totalCost += upgradeCost;
+        // Pay cost immediately, start upgrade timer
         money -= upgradeCost;
+        this.totalCost += upgradeCost;
+        this.pendingLevel = nextLevel;
+        // Delay scales with level
+        const delays = [60, 90, 120, 150, 210];
+        const delay = delays[Math.min(this.level - 1, delays.length - 1)];
+        this.upgradeTimer = delay;
+        this.upgradeTotal = delay;
+        updateTowerPanel();
+    }
+
+    completeUpgrade() {
+        if (!this.pendingLevel) return;
+        if (this.level >= MAX_TOWER_LEVEL) { this.pendingLevel = null; return; }
+        this.level++;
+        this.damage = this.pendingLevel.damage;
+        this.range = this.pendingLevel.range;
+        this.fireRate = this.pendingLevel.fireRate;
+        this.pendingLevel = null;
+        this.upgradeTimer = 0;
+        this.upgradeTotal = 0;
         updateTowerPanel();
     }
 
@@ -1281,6 +1620,16 @@ class Tower {
 
     update() {
         if (!gameStarted || gamePaused) return;
+
+        // Upgrade in progress — count down and don't fire
+        if (this.upgradeTimer > 0) {
+            this.upgradeTimer--;
+            if (this.upgradeTimer === 0) {
+                this.completeUpgrade();
+            }
+            return;
+        }
+
         if (this.cooldown > 0) this.cooldown--;
 
         const typeDef = TOWER_TYPES[this.type];
@@ -1295,6 +1644,12 @@ class Tower {
                 enemiesInRange.push({ enemy, distance });
             }
         }
+
+        // Swarm: anti-air only — only target flying enemies
+        if (typeDef.multiTarget && this.type === 'swarm') {
+            enemiesInRange = enemiesInRange.filter(e => e.enemy.isFlying);
+        }
+
         enemiesInRange.sort((a, b) => a.distance - b.distance);
 
         if (enemiesInRange.length > 0) {
@@ -1304,7 +1659,65 @@ class Tower {
             );
 
             if (this.cooldown === 0) {
-                if (typeDef.multiTarget) {
+                if (typeDef.melee) {
+                    // Bash: melee AoE — damage all enemies in range instantly
+                    const levelStats = typeDef.levels[this.level - 1];
+                    for (const entry of enemiesInRange) {
+                        const e = entry.enemy;
+                        const actualDamage = e.armor > 0
+                            ? Math.max(1, this.damage - e.armor)
+                            : this.damage;
+                        e.health -= actualDamage;
+                        // Stun chance
+                        if (Math.random() < levelStats.stunChance) {
+                            e.stunTimer = levelStats.stunDuration;
+                        }
+                    }
+                    // Track shockwave animation
+                    this.bashFlashTimer = 10;
+
+                    // Batch death check for melee kills
+                    const deadEnemies = enemies.filter(e => e.health <= 0);
+                    if (deadEnemies.length > 0) {
+                        enemies = enemies.filter(e => e.health > 0);
+                        for (const dead of deadEnemies) {
+                            money += dead.goldReward;
+                            score += dead.scoreReward;
+                            floatingTexts.push({
+                                x: dead.x, y: dead.y - 10,
+                                text: `+${dead.goldReward}`,
+                                color: '#ffcc00', life: 50
+                            });
+                            if (dead.spawnsOnDeath > 0 && !dead.isChild) {
+                                for (let i = 0; i < dead.spawnsOnDeath; i++) {
+                                    const child = new Enemy(dead.type, false);
+                                    child.isChild = true;
+                                    child.spawnsOnDeath = 0;
+                                    child.x = dead.x + (Math.random() - 0.5) * 10;
+                                    child.y = dead.y + (Math.random() - 0.5) * 10;
+                                    child.maxHealth = Math.floor(dead.maxHealth * 0.4);
+                                    child.health = child.maxHealth;
+                                    child.size = Math.floor(dead.size * 0.7);
+                                    child.goldReward = 3;
+                                    child.scoreReward = 3;
+                                    child.goal = dead.goal;
+                                    const gx = Math.floor(dead.x / GRID_SIZE);
+                                    const gy = Math.floor(dead.y / GRID_SIZE);
+                                    child.path = aStar({ x: gx, y: gy }, dead.goal);
+                                    if (child.path.length === 0) {
+                                        for (let [ox, oy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+                                            child.path = aStar({ x: gx+ox, y: gy+oy }, dead.goal);
+                                            if (child.path.length > 0) break;
+                                        }
+                                    }
+                                    enemies.push(child);
+                                }
+                            }
+                        }
+                        enemyDeathSound.currentTime = 0;
+                        enemyDeathSound.play();
+                    }
+                } else if (typeDef.multiTarget) {
                     // Swarm: fire at multiple targets
                     const levelStats = typeDef.levels[this.level - 1];
                     const targetCount = Math.min(levelStats.targets, enemiesInRange.length);
@@ -1330,6 +1743,13 @@ class Tower {
                         proj.slowFactor = levelStats.slowFactor;
                         proj.slowDuration = levelStats.slowDuration;
                     }
+                    // Per-level splash radius override (e.g. Typhoon)
+                    if (this.type === 'squirt') {
+                        const levelStats = typeDef.levels[this.level - 1];
+                        if (levelStats.splashRadius) {
+                            proj.splashRadius = levelStats.splashRadius;
+                        }
+                    }
                     projectiles.push(proj);
                 }
                 const snd = towerSounds[this.type];
@@ -1337,6 +1757,9 @@ class Tower {
                 this.cooldown = this.fireRate;
             }
         }
+
+        // Decay bash flash timer
+        if (this.bashFlashTimer > 0) this.bashFlashTimer--;
     }
 
     draw() {
@@ -1368,6 +1791,15 @@ class Tower {
         // Type-specific colors by level
         const color = typeDef.colors.ring[this.level - 1];
         const dark = typeDef.colors.dark[this.level - 1];
+
+        // Evolution glow for max-level towers
+        if (this.level >= MAX_TOWER_LEVEL) {
+            const pulse = 0.15 + Math.sin(Date.now() * 0.003) * 0.08;
+            ctx.fillStyle = `rgba(255, 224, 100, ${pulse})`;
+            ctx.beginPath();
+            ctx.arc(cx, cy, gs * 0.46, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         // Outer ring
         const outerR = gs * 0.36;
@@ -1409,7 +1841,7 @@ class Tower {
         switch (typeDef.barrelStyle) {
             case 'thin': {
                 const len = gs * 0.42;
-                const w = 1.2 + this.level * 0.5;
+                const w = 1.2 + Math.min(this.level, 4) * 0.5;
                 ctx.strokeStyle = '#222';
                 ctx.lineWidth = w + 1.5;
                 ctx.beginPath();
@@ -1426,7 +1858,7 @@ class Tower {
             }
             case 'wide': {
                 const len = gs * 0.48;
-                const baseW = 1.5 + this.level * 0.6;
+                const baseW = 1.5 + Math.min(this.level, 4) * 0.6;
                 const tipW = baseW + 2.5;
                 const bx = cx + cosA * 5, by = cy + sinA * 5;
                 const tx = cx + cosA * len, ty = cy + sinA * len;
@@ -1450,7 +1882,7 @@ class Tower {
             }
             case 'long': {
                 const len = gs * 0.60;
-                const w = 1.5 + this.level * 0.8;
+                const w = 1.5 + Math.min(this.level, 4) * 0.8;
                 ctx.strokeStyle = '#222';
                 ctx.lineWidth = w + 2;
                 ctx.beginPath();
@@ -1465,15 +1897,15 @@ class Tower {
                 ctx.stroke();
                 ctx.fillStyle = '#222';
                 ctx.beginPath();
-                ctx.arc(cx + cosA * len, cy + sinA * len, this.level + 1.5, 0, Math.PI * 2);
+                ctx.arc(cx + cosA * len, cy + sinA * len, Math.min(this.level, 4) + 1.5, 0, Math.PI * 2);
                 ctx.fill();
                 break;
             }
             case 'multi': {
                 const len = gs * 0.40;
-                const w = 1.0 + this.level * 0.4;
-                const barrelCount = Math.min(this.level + 1, 3);
-                const spread = 0.4;
+                const w = 1.0 + Math.min(this.level, 4) * 0.4;
+                const barrelCount = Math.min(this.level + 1, 5);
+                const spread = barrelCount > 3 ? 0.3 : 0.4;
                 for (let i = 0; i < barrelCount; i++) {
                     const bAngle = this.angle + (i - (barrelCount - 1) / 2) * spread;
                     const bc = Math.cos(bAngle), bs = Math.sin(bAngle);
@@ -1496,7 +1928,7 @@ class Tower {
                 const len = gs * 0.45;
                 const bx = cx + cosA * 5, by = cy + sinA * 5;
                 const tx = cx + cosA * len, ty = cy + sinA * len;
-                const coneW = 2.5 + this.level;
+                const coneW = 2.5 + Math.min(this.level, 5);
                 ctx.fillStyle = '#222';
                 ctx.beginPath();
                 ctx.moveTo(bx, by);
@@ -1513,10 +1945,60 @@ class Tower {
                 ctx.fill();
                 break;
             }
+            case 'bash': {
+                // Hammer/mace — short thick shaft with circle head
+                const len = gs * 0.35;
+                const shaftW = 2 + Math.min(this.level, 4) * 0.5;
+                const headR = 3 + Math.min(this.level, 5);
+                // Shaft
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = shaftW + 2;
+                ctx.beginPath();
+                ctx.moveTo(cx + cosA * 5, cy + sinA * 5);
+                ctx.lineTo(cx + cosA * len, cy + sinA * len);
+                ctx.stroke();
+                ctx.strokeStyle = '#8a6030';
+                ctx.lineWidth = shaftW;
+                ctx.beginPath();
+                ctx.moveTo(cx + cosA * 6, cy + sinA * 6);
+                ctx.lineTo(cx + cosA * (len - 1), cy + sinA * (len - 1));
+                ctx.stroke();
+                // Hammer head
+                const hx = cx + cosA * len;
+                const hy = cy + sinA * len;
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.arc(hx, hy, headR + 1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = typeDef.colors.ring[this.level - 1];
+                ctx.beginPath();
+                ctx.arc(hx, hy, headR, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
         }
 
-        // Muzzle flash
-        if (this.cooldown > this.fireRate - 4) {
+        // Bash shockwave effect
+        if (typeDef.melee && this.bashFlashTimer > 0) {
+            const progress = 1 - (this.bashFlashTimer / 10);
+            const waveR = this.range * progress;
+            const alpha = 0.4 * (1 - progress);
+            ctx.strokeStyle = `rgba(224, 160, 64, ${alpha})`;
+            ctx.lineWidth = 3 * (1 - progress) + 1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, waveR, 0, Math.PI * 2);
+            ctx.stroke();
+            // Inner flash
+            if (this.bashFlashTimer > 7) {
+                ctx.fillStyle = `rgba(255, 200, 80, ${0.3 * (this.bashFlashTimer - 7) / 3})`;
+                ctx.beginPath();
+                ctx.arc(cx, cy, this.range * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Muzzle flash (skip for melee towers)
+        if (!typeDef.melee && this.cooldown > this.fireRate - 4) {
             const flashLen = typeDef.barrelStyle === 'long' ? gs * 0.60 :
                              typeDef.barrelStyle === 'thin' ? gs * 0.42 :
                              typeDef.barrelStyle === 'wide' ? gs * 0.48 :
@@ -1534,15 +2016,45 @@ class Tower {
         }
 
         // Level pips (type-colored)
+        const pipSpacing = this.level > 3 ? 0.5 : 0.8;
         for (let i = 0; i < this.level; i++) {
-            const pipAngle = -Math.PI / 2 + (i - (this.level - 1) / 2) * 0.8;
+            const pipAngle = -Math.PI / 2 + (i - (this.level - 1) / 2) * pipSpacing;
             const pipDist = outerR + 5;
             const px = cx + Math.cos(pipAngle) * pipDist;
             const py = cy + Math.sin(pipAngle) * pipDist;
+            if (this.level >= MAX_TOWER_LEVEL) {
+                // Golden glow for evolved towers
+                ctx.fillStyle = 'rgba(255, 224, 100, 0.4)';
+                ctx.beginPath();
+                ctx.arc(px, py, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(px, py, 2, 0, Math.PI * 2);
             ctx.fill();
+        }
+
+        // Upgrade progress indicator
+        if (this.upgradeTimer > 0 && this.upgradeTotal > 0) {
+            const progress = 1 - (this.upgradeTimer / this.upgradeTotal);
+            // Dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(gx, gy, gs, gs);
+            // Progress arc
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerR - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+            ctx.stroke();
+            // Percentage text
+            ctx.fillStyle = '#ffcc00';
+            ctx.font = 'bold 10px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${Math.floor(progress * 100)}%`, cx, cy);
+            ctx.textAlign = 'start';
+            ctx.textBaseline = 'alphabetic';
         }
     }
 }
@@ -1553,8 +2065,8 @@ function getWaveType(lvl) {
     if (lvl <= 5) return 'normal';
     // Fixed introduction schedule
     const introWaves = { 6: 'group', 7: 'fast', 8: 'normal', 9: 'immune',
-        11: 'group', 12: 'fast', 13: 'spawn', 14: 'dark', 15: 'flying',
-        16: 'normal', 17: 'group', 18: 'fast', 19: 'immune' };
+        11: 'flying', 12: 'fast', 13: 'spawn', 14: 'dark', 15: 'group',
+        16: 'normal', 17: 'flying', 18: 'fast', 19: 'immune' };
     if (introWaves[lvl]) return introWaves[lvl];
     // Rotating types for waves 21+
     const rotation = ['normal', 'group', 'fast', 'immune', 'spawn', 'flying', 'dark'];
@@ -1615,6 +2127,8 @@ function resetGame() {
     WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
     waveJustCleared = false;
     currentWaveType = 'normal';
+    selectedEnemy = null;
+    floatingTexts = [];
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
     for (let x = 0; x < COLS; x++) {
         if (x !== topOpening) grid[0][x] = 1;
@@ -1631,6 +2145,49 @@ function resetGame() {
     pauseButton.textContent = 'Pause';
 }
 
+// Show tower preview on hover (before placing)
+function showTowerPreview(type) {
+    if (selectedTower) return; // don't override selected tower info
+    const typeDef = TOWER_TYPES[type];
+    const stats = typeDef.levels[0];
+
+    towerPanel.style.display = 'block';
+    upgradeButton.style.display = 'none';
+    sellButton.style.display = 'none';
+    towerPanelTitle.textContent = typeDef.name + ' Tower';
+
+    // Human-readable fire speed
+    const speed = stats.fireRate <= 30 ? 'Fast' : stats.fireRate <= 50 ? 'Medium' : 'Slow';
+
+    let statsHtml = `
+        <span style="color:#aaa;font-style:italic">${typeDef.description}</span><br>
+        <span style="color:#ffcc00">Cost: $${typeDef.cost}</span><br>
+        Damage: ${stats.damage}<br>
+        Range: ${stats.range}<br>
+        Speed: ${speed}
+    `;
+
+    if (type === 'squirt') {
+        statsHtml += `<br>Splash: ${typeDef.splashRadius}px`;
+    }
+    if (type === 'frost') {
+        statsHtml += `<br>Slow: ${Math.round(stats.slowFactor * 100)}%`;
+    }
+    if (type === 'swarm') {
+        statsHtml += `<br>Targets: ${stats.targets} (air only)`;
+    }
+    if (type === 'bash') {
+        statsHtml += `<br>Stun: ${Math.round(stats.stunChance * 100)}%`;
+        statsHtml += `<br>Melee AoE`;
+    }
+
+    if (typeDef.evolutionName) {
+        statsHtml += `<br><span style="color:#ffe080;font-size:11px">Evolves to ${typeDef.evolutionName} at Lv${MAX_TOWER_LEVEL}</span>`;
+    }
+
+    towerStats.innerHTML = statsHtml;
+}
+
 // Update tower panel
 function updateTowerPanel() {
     if (!selectedTower) {
@@ -1638,12 +2195,19 @@ function updateTowerPanel() {
         return;
     }
     towerPanel.style.display = 'block';
+    upgradeButton.style.display = '';
+    sellButton.style.display = '';
 
     const typeDef = TOWER_TYPES[selectedTower.type];
-    towerPanelTitle.textContent = typeDef.name + ' Tower';
+    const displayName = selectedTower.level >= MAX_TOWER_LEVEL && typeDef.evolutionName
+        ? typeDef.evolutionName : typeDef.name;
+    towerPanelTitle.textContent = displayName + ' Tower';
+
+    const lvlStats = typeDef.levels[selectedTower.level - 1];
+    const currentSplash = lvlStats.splashRadius || typeDef.splashRadius;
 
     let statsHtml = `
-        Level: ${selectedTower.level}/3<br>
+        Level: ${selectedTower.level}/${MAX_TOWER_LEVEL}<br>
         Damage: ${selectedTower.damage}<br>
         Range: ${selectedTower.range}<br>
         Fire Rate: ${selectedTower.fireRate} frames<br>
@@ -1652,22 +2216,32 @@ function updateTowerPanel() {
     `;
 
     if (selectedTower.type === 'squirt') {
-        statsHtml += `<br>Splash: ${typeDef.splashRadius}px`;
+        statsHtml += `<br>Splash: ${currentSplash}px`;
     }
     if (selectedTower.type === 'frost') {
-        const lvlStats = typeDef.levels[selectedTower.level - 1];
         statsHtml += `<br>Slow: ${Math.round(lvlStats.slowFactor * 100)}% for ${(lvlStats.slowDuration / 60).toFixed(1)}s`;
     }
     if (selectedTower.type === 'swarm') {
-        const lvlStats = typeDef.levels[selectedTower.level - 1];
         statsHtml += `<br>Targets: ${lvlStats.targets}`;
+    }
+    if (selectedTower.type === 'bash') {
+        statsHtml += `<br>Stun: ${Math.round(lvlStats.stunChance * 100)}% for ${(lvlStats.stunDuration / 60).toFixed(1)}s`;
+        statsHtml += `<br>Melee AoE`;
     }
 
     towerStats.innerHTML = statsHtml;
 
-    if (selectedTower.level < 3) {
+    if (selectedTower.upgradeTimer > 0) {
+        const pct = Math.floor((1 - selectedTower.upgradeTimer / selectedTower.upgradeTotal) * 100);
+        upgradeButton.textContent = `Upgrading... ${pct}%`;
+        upgradeButton.disabled = true;
+    } else if (selectedTower.level < MAX_TOWER_LEVEL) {
         const nextUpgradeCost = typeDef.levels[selectedTower.level].upgradeCost;
-        upgradeButton.textContent = `Upgrade ($${nextUpgradeCost})`;
+        if (selectedTower.level === MAX_TOWER_LEVEL - 1 && typeDef.evolutionName) {
+            upgradeButton.textContent = `Evolve to ${typeDef.evolutionName} ($${nextUpgradeCost})`;
+        } else {
+            upgradeButton.textContent = `Upgrade ($${nextUpgradeCost})`;
+        }
         upgradeButton.disabled = money < nextUpgradeCost;
     } else {
         upgradeButton.textContent = 'Max Level';
@@ -1708,6 +2282,13 @@ function gameLoop(timestamp) {
         projectile.draw();
     }
 
+    // Floating text
+    if (!gamePaused) updateFloatingTexts();
+    drawFloatingTexts();
+
+    // Selected enemy info tooltip
+    drawEnemyInfo();
+
     // Update wave timer
     if (gameStarted && !gamePaused && waveTimer > 0) {
         waveTimer -= 1 / 60;
@@ -1730,10 +2311,14 @@ function gameLoop(timestamp) {
         pauseButton.disabled = true;
     }
 
-    // Update upgrade button state
+    // Update upgrade button state and panel text during upgrade
     if (selectedTower) {
         const typeDef = TOWER_TYPES[selectedTower.type];
-        if (selectedTower.level >= 3) {
+        if (selectedTower.upgradeTimer > 0) {
+            upgradeButton.disabled = true;
+            const pct = Math.floor((1 - selectedTower.upgradeTimer / selectedTower.upgradeTotal) * 100);
+            upgradeButton.textContent = `Upgrading... ${pct}%`;
+        } else if (selectedTower.level >= MAX_TOWER_LEVEL) {
             upgradeButton.disabled = true;
         } else {
             upgradeButton.disabled = money < typeDef.levels[selectedTower.level].upgradeCost;
@@ -1753,6 +2338,7 @@ function gameLoop(timestamp) {
     });
 
     drawHUD();
+    drawWaveBar();
 
     if (!gameStarted) {
         drawOverlayMessage('-DesktopTowerDefense-', 'Click "Start Game" to begin', '#ece6d0');
@@ -1773,6 +2359,18 @@ towerTypeButtons.forEach(btn => {
         towerTypeButtons.forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
     });
+    btn.addEventListener('mouseenter', () => {
+        hoverPreviewType = btn.dataset.type;
+        showTowerPreview(btn.dataset.type);
+    });
+    btn.addEventListener('mouseleave', () => {
+        hoverPreviewType = null;
+        if (selectedTower) {
+            updateTowerPanel();
+        } else {
+            towerPanel.style.display = 'none';
+        }
+    });
 });
 
 // Place or select tower on canvas click
@@ -1784,6 +2382,22 @@ canvas.addEventListener('click', (e) => {
     const y = e.clientY - rect.top;
     const gridX = Math.floor(x / GRID_SIZE);
     const gridY = Math.floor(y / GRID_SIZE);
+
+    // Check if clicking an enemy
+    let clickedEnemy = null;
+    for (let enemy of enemies) {
+        const edx = enemy.x - x;
+        const edy = enemy.y - y;
+        if (Math.sqrt(edx * edx + edy * edy) <= enemy.size / 2 + 5) {
+            clickedEnemy = enemy;
+            break;
+        }
+    }
+    if (clickedEnemy) {
+        selectedEnemy = (selectedEnemy === clickedEnemy) ? null : clickedEnemy;
+        return;
+    }
+    selectedEnemy = null;
 
     if (gridY === 0 || gridY === ROWS - 1 || gridX === 0 || gridX === COLS - 1) return;
     if ((gridX === topOpening && gridY === 0) || (gridX === 0 && gridY === leftOpening) ||
@@ -1890,6 +2504,7 @@ document.addEventListener('click', (e) => {
     if (!gameOver && e.target !== canvas && e.target !== upgradeButton && e.target !== sellButton &&
         !e.target.closest('.tower-type-btn')) {
         selectedTower = null;
+        selectedEnemy = null;
         towerPanel.style.display = 'none';
     }
 });
