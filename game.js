@@ -113,12 +113,12 @@ const TOWER_TYPES = {
         description: 'Anti-air, fires missiles at flyers',
         cost: 120,
         levels: [
-            { damage: 6,  range: 100, fireRate: 50, targets: 2, upgradeCost: 0   },
-            { damage: 10, range: 110, fireRate: 45, targets: 3, upgradeCost: 90  },
-            { damage: 15, range: 120, fireRate: 40, targets: 4, upgradeCost: 130 },
-            { damage: 22, range: 130, fireRate: 35, targets: 5, upgradeCost: 190 },
-            { damage: 30, range: 140, fireRate: 30, targets: 6, upgradeCost: 270 },
-            { damage: 50, range: 160, fireRate: 25, targets: 8, upgradeCost: 450 },
+            { damage: 12, range: 100, fireRate: 20, targets: 2, upgradeCost: 0   },
+            { damage: 18, range: 115, fireRate: 18, targets: 3, upgradeCost: 90  },
+            { damage: 28, range: 130, fireRate: 15, targets: 4, upgradeCost: 130 },
+            { damage: 40, range: 140, fireRate: 12, targets: 5, upgradeCost: 190 },
+            { damage: 55, range: 155, fireRate: 10, targets: 7, upgradeCost: 270 },
+            { damage: 80, range: 170, fireRate: 8,  targets: 10, upgradeCost: 450 },
         ],
         colors: {
             ring: ['#8a5aa0', '#a070b8', '#b888d0', '#c898e0', '#d8a8f0', '#f0d0ff'],
@@ -126,7 +126,7 @@ const TOWER_TYPES = {
         },
         barrelColor: '#8a5aa0',
         projectileColor: '#b888d0',
-        projectileSpeed: 5,
+        projectileSpeed: 9,
         barrelStyle: 'multi',
         splashRadius: 0,
         multiTarget: true,
@@ -425,6 +425,77 @@ function canPlaceTower(gridX, gridY) {
         return false;
     }
     return true;
+}
+
+// Spawn children when a spawn-type enemy dies
+function spawnChildren(dead) {
+    if (dead.spawnsOnDeath <= 0 || dead.isChild) return;
+
+    const parentGx = Math.floor(dead.x / GRID_SIZE);
+    const parentGy = Math.floor(dead.y / GRID_SIZE);
+
+    for (let i = 0; i < dead.spawnsOnDeath; i++) {
+        const child = new Enemy(dead.type, false);
+        child.isChild = true;
+        child.spawnsOnDeath = 0;
+        child.maxHealth = Math.floor(dead.maxHealth * 0.4);
+        child.health = child.maxHealth;
+        child.size = Math.floor(dead.size * 0.7);
+        child.goldReward = 3;
+        child.scoreReward = 3;
+        child.goal = dead.goal;
+
+        // 50% chance to pop through a crack between edge-to-edge towers
+        let popped = false;
+        if (Math.random() < 0.5) {
+            // Scan 4 cardinal directions for tower-wall → open-cell transition
+            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+            // Shuffle directions so crack direction is random
+            for (let j = dirs.length - 1; j > 0; j--) {
+                const k = Math.floor(Math.random() * (j + 1));
+                [dirs[j], dirs[k]] = [dirs[k], dirs[j]];
+            }
+            for (const [ddx, ddy] of dirs) {
+                // Walk outward from parent cell until we cross a blocked→open boundary
+                let cx = parentGx, cy = parentGy;
+                let foundWall = false;
+                for (let step = 1; step <= 6; step++) {
+                    const nx = parentGx + ddx * step;
+                    const ny = parentGy + ddy * step;
+                    if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) break;
+                    if (grid[ny][nx] === 1) {
+                        foundWall = true;
+                    } else if (foundWall) {
+                        // Found open cell on far side of a wall — try to pathfind from here
+                        const testPath = aStar({ x: nx, y: ny }, dead.goal);
+                        if (testPath.length > 0) {
+                            child.x = nx * GRID_SIZE + GRID_SIZE / 2;
+                            child.y = ny * GRID_SIZE + GRID_SIZE / 2;
+                            child.path = testPath;
+                            popped = true;
+                            break;
+                        }
+                    }
+                }
+                if (popped) break;
+            }
+        }
+
+        if (!popped) {
+            // Normal spawn at parent position
+            child.x = dead.x + (Math.random() - 0.5) * 10;
+            child.y = dead.y + (Math.random() - 0.5) * 10;
+            child.path = aStar({ x: parentGx, y: parentGy }, dead.goal);
+            if (child.path.length === 0) {
+                for (const [ox, oy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
+                    child.path = aStar({ x: parentGx + ox, y: parentGy + oy }, dead.goal);
+                    if (child.path.length > 0) break;
+                }
+            }
+        }
+
+        enemies.push(child);
+    }
 }
 
 // ==========================================
@@ -831,6 +902,8 @@ function drawWaveBar() {
     if (!gameStarted) return;
     const barH = 32;
     const barY = canvas.height - barH;
+
+    // Background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, barY, canvas.width, barH);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
@@ -845,42 +918,98 @@ function drawWaveBar() {
         spawn: '#665520', flying: '#304860', dark: '#222', boss: '#552255'
     };
 
-    ctx.font = 'bold 13px Arial, sans-serif';
+    const cellW = 58;
+    const cellGap = 3;
+    const cellStep = cellW + cellGap;
+    const cellH = barH - 6;
+    const cellY = barY + 3;
+
+    // Current wave = level - 1 (level increments immediately after spawnWave)
+    const currentWave = Math.max(1, level - 1);
+
+    // Progress toward next wave: 0 = just spawned, 1 = about to spawn next
+    const waveProgress = WAVE_DELAY > 0 ? Math.max(0, Math.min(1, 1 - waveTimer / WAVE_DELAY)) : 1;
+
+    // Smooth scroll: anchor the current wave at ~20% from left edge
+    const anchorX = canvas.width * 0.18;
+    const scrollOffset = anchorX - (currentWave - 1) * cellStep - waveProgress * cellStep;
+
+    // Clip to bar area
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, barY, canvas.width, barH);
+    ctx.clip();
+
     ctx.textBaseline = 'middle';
 
-    const startWave = Math.max(1, level - 2);
-    let xPos = 6;
-    for (let w = startWave; w < Math.min(startWave + 16, 101); w++) {
+    // Draw wave cells
+    for (let w = 1; w <= 100; w++) {
+        const x = scrollOffset + (w - 1) * cellStep;
+        if (x + cellW < -20 || x > canvas.width + 20) continue;
+
         const wType = getWaveType(w);
+        const isCurrent = w === currentWave;
+        const isPast = w < currentWave;
         const label = wType === 'boss' ? 'BOSS' : ENEMY_TYPES[wType]?.name.toUpperCase() || wType.toUpperCase();
-        const tw = ctx.measureText(label).width + 14;
 
-        // Highlight current wave
-        const isCurrent = w === level - 1;
-
-        ctx.fillStyle = waveBg[wType] || '#333';
-        if (isCurrent) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+        // Cell background
+        if (isPast) {
+            ctx.fillStyle = 'rgba(25, 25, 25, 0.85)';
+        } else {
+            ctx.fillStyle = waveBg[wType] || '#333';
         }
-        drawRoundedRect(xPos, barY + 3, tw, barH - 6, 4);
+        drawRoundedRect(x, cellY, cellW, cellH, 4);
         ctx.fill();
 
-        // Wave number small text
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        if (isCurrent) {
+            // Progress fill inside current cell
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, cellY, cellW * waveProgress, cellH);
+            ctx.clip();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            drawRoundedRect(x, cellY, cellW, cellH, 4);
+            ctx.fill();
+            ctx.restore();
+
+            // Glowing border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 6;
+            drawRoundedRect(x, cellY, cellW, cellH, 4);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // Wave number
+        ctx.fillStyle = isPast ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.35)';
         ctx.font = '9px Arial, sans-serif';
-        ctx.fillText(`${w}`, xPos + 3, barY + 9);
+        ctx.fillText(`${w}`, x + 3, cellY + 9);
 
         // Wave type label
-        ctx.font = 'bold 13px Arial, sans-serif';
-        ctx.fillStyle = waveColors[wType] || '#999';
-        if (isCurrent) {
+        ctx.font = 'bold 12px Arial, sans-serif';
+        if (isPast) {
+            ctx.fillStyle = 'rgba(100,100,100,0.5)';
+        } else if (isCurrent) {
             ctx.fillStyle = '#fff';
+        } else {
+            ctx.fillStyle = waveColors[wType] || '#999';
         }
-        ctx.fillText(label, xPos + 7, barY + barH / 2 + 3);
-
-        xPos += tw + 3;
-        if (xPos > canvas.width - 10) break;
+        ctx.fillText(label, x + 7, cellY + cellH / 2 + 2);
     }
+
+    // Small triangle marker pointing down at the current wave
+    const markerCenterX = scrollOffset + (currentWave - 1) * cellStep + cellW / 2;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(markerCenterX - 5, barY + 1);
+    ctx.lineTo(markerCenterX + 5, barY + 1);
+    ctx.lineTo(markerCenterX, barY + 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
     ctx.textBaseline = 'alphabetic';
 }
 
@@ -1208,7 +1337,7 @@ class Enemy {
             ctx.fill();
         }
 
-        // Body — Fast type gets elongated oval
+        // Body — Fast type gets elongated horizontal oval, Spawn parent gets vertical oval
         const grad = ctx.createRadialGradient(
             this.x - r * 0.2, this.y - r * 0.2, r * 0.1,
             this.x, this.y, r
@@ -1219,11 +1348,19 @@ class Enemy {
         ctx.fillStyle = grad;
         ctx.beginPath();
         if (this.type === 'fast' && !this.isBoss) {
-            // Elongated oval for fast enemies
+            // Elongated horizontal oval for fast enemies
             ctx.save();
             ctx.translate(this.x, this.y);
             ctx.rotate(this.angle);
             ctx.scale(1.3, 0.8);
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.restore();
+        } else if (this.type === 'spawn' && !this.isChild && !this.isBoss) {
+            // Vertical oval for spawn parents
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+            ctx.scale(0.8, 1.25);
             ctx.arc(0, 0, r, 0, Math.PI * 2);
             ctx.restore();
         } else {
@@ -1473,34 +1610,7 @@ class Projectile {
                         color: '#ffcc00', life: 50
                     });
 
-                    // Spawn children on death
-                    if (dead.spawnsOnDeath > 0 && !dead.isChild) {
-                        for (let i = 0; i < dead.spawnsOnDeath; i++) {
-                            const child = new Enemy(dead.type, false);
-                            child.isChild = true;
-                            child.spawnsOnDeath = 0;
-                            child.x = dead.x + (Math.random() - 0.5) * 10;
-                            child.y = dead.y + (Math.random() - 0.5) * 10;
-                            child.maxHealth = Math.floor(dead.maxHealth * 0.4);
-                            child.health = child.maxHealth;
-                            child.size = Math.floor(dead.size * 0.7);
-                            child.goldReward = 3;
-                            child.scoreReward = 3;
-                            child.goal = dead.goal;
-                            // Pathfind from parent's current grid position
-                            const gx = Math.floor(dead.x / GRID_SIZE);
-                            const gy = Math.floor(dead.y / GRID_SIZE);
-                            child.path = aStar({ x: gx, y: gy }, dead.goal);
-                            if (child.path.length === 0) {
-                                // Fallback: try from nearby cells
-                                for (let [ox, oy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
-                                    child.path = aStar({ x: gx+ox, y: gy+oy }, dead.goal);
-                                    if (child.path.length > 0) break;
-                                }
-                            }
-                            enemies.push(child);
-                        }
-                    }
+                    spawnChildren(dead);
                 }
                 enemyDeathSound.currentTime = 0;
                 enemyDeathSound.play();
@@ -1672,12 +1782,7 @@ class Tower {
         towers = towers.filter(t => t !== this);
         selectedTower = null;
         towerPanel.style.display = 'none';
-        enemies.forEach(e => {
-            if (e.isFlying) return;
-            const currentGridX = Math.floor(e.x / GRID_SIZE);
-            const currentGridY = Math.floor(e.y / GRID_SIZE);
-            e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
-        });
+        // No repath on sell — existing paths are still valid (cells only opened, not blocked)
     }
 
     update() {
@@ -1750,31 +1855,7 @@ class Tower {
                                 text: `+${dead.goldReward}`,
                                 color: '#ffcc00', life: 50
                             });
-                            if (dead.spawnsOnDeath > 0 && !dead.isChild) {
-                                for (let i = 0; i < dead.spawnsOnDeath; i++) {
-                                    const child = new Enemy(dead.type, false);
-                                    child.isChild = true;
-                                    child.spawnsOnDeath = 0;
-                                    child.x = dead.x + (Math.random() - 0.5) * 10;
-                                    child.y = dead.y + (Math.random() - 0.5) * 10;
-                                    child.maxHealth = Math.floor(dead.maxHealth * 0.4);
-                                    child.health = child.maxHealth;
-                                    child.size = Math.floor(dead.size * 0.7);
-                                    child.goldReward = 3;
-                                    child.scoreReward = 3;
-                                    child.goal = dead.goal;
-                                    const gx = Math.floor(dead.x / GRID_SIZE);
-                                    const gy = Math.floor(dead.y / GRID_SIZE);
-                                    child.path = aStar({ x: gx, y: gy }, dead.goal);
-                                    if (child.path.length === 0) {
-                                        for (let [ox, oy] of [[0,1],[1,0],[0,-1],[-1,0]]) {
-                                            child.path = aStar({ x: gx+ox, y: gy+oy }, dead.goal);
-                                            if (child.path.length > 0) break;
-                                        }
-                                    }
-                                    enemies.push(child);
-                                }
-                            }
+                            spawnChildren(dead);
                         }
                         enemyDeathSound.currentTime = 0;
                         enemyDeathSound.play();
@@ -1863,178 +1944,270 @@ class Tower {
             ctx.fill();
         }
 
-        // Outer ring
-        const outerR = gs * 0.36;
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(cx, cy, outerR, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Colored ring
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(cx, cy, outerR - 3, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner ring
-        ctx.strokeStyle = '#444';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(cx, cy, outerR - 6, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Center hub
-        ctx.fillStyle = dark;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#222';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Barrel (varies by type)
+        // Barrel direction
         const cosA = Math.cos(this.angle);
         const sinA = Math.sin(this.angle);
         const pX = -sinA; // perpendicular
         const pY = cosA;
+        const lvl = Math.min(this.level, 5);
 
-        switch (typeDef.barrelStyle) {
-            case 'thin': {
-                const len = gs * 0.42;
-                const w = 1.2 + Math.min(this.level, 4) * 0.5;
-                ctx.strokeStyle = '#222';
-                ctx.lineWidth = w + 1.5;
-                ctx.beginPath();
-                ctx.moveTo(cx + cosA * 5, cy + sinA * 5);
-                ctx.lineTo(cx + cosA * len, cy + sinA * len);
-                ctx.stroke();
-                ctx.strokeStyle = '#666';
-                ctx.lineWidth = w;
-                ctx.beginPath();
-                ctx.moveTo(cx + cosA * 6, cy + sinA * 6);
-                ctx.lineTo(cx + cosA * (len - 1), cy + sinA * (len - 1));
-                ctx.stroke();
-                break;
-            }
-            case 'wide': {
-                const len = gs * 0.48;
-                const baseW = 1.5 + Math.min(this.level, 4) * 0.6;
-                const tipW = baseW + 2.5;
-                const bx = cx + cosA * 5, by = cy + sinA * 5;
-                const tx = cx + cosA * len, ty = cy + sinA * len;
-                ctx.fillStyle = '#222';
-                ctx.beginPath();
-                ctx.moveTo(bx + pX * baseW, by + pY * baseW);
-                ctx.lineTo(tx + pX * tipW, ty + pY * tipW);
-                ctx.lineTo(tx - pX * tipW, ty - pY * tipW);
-                ctx.lineTo(bx - pX * baseW, by - pY * baseW);
-                ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = '#4a8ab0';
-                ctx.beginPath();
-                ctx.moveTo(bx + pX * (baseW - 0.8), by + pY * (baseW - 0.8));
-                ctx.lineTo(tx + pX * (tipW - 0.8), ty + pY * (tipW - 0.8));
-                ctx.lineTo(tx - pX * (tipW - 0.8), ty - pY * (tipW - 0.8));
-                ctx.lineTo(bx - pX * (baseW - 0.8), by - pY * (baseW - 0.8));
-                ctx.closePath();
-                ctx.fill();
-                break;
-            }
-            case 'long': {
-                const len = gs * 0.60;
-                const w = 1.5 + Math.min(this.level, 4) * 0.8;
+        // ---- Per-type body + weapon ----
+        switch (this.type) {
+            case 'pellet': {
+                // Classic turret: small pivot base, long prominent barrel
+                const len = gs * 0.52;
+                const w = 1.5 + lvl * 0.3;
+                // Barrel outline
                 ctx.strokeStyle = '#222';
                 ctx.lineWidth = w + 2;
                 ctx.beginPath();
-                ctx.moveTo(cx + cosA * 5, cy + sinA * 5);
+                ctx.moveTo(cx, cy);
                 ctx.lineTo(cx + cosA * len, cy + sinA * len);
                 ctx.stroke();
-                ctx.strokeStyle = '#555';
+                // Barrel fill
+                ctx.strokeStyle = color;
                 ctx.lineWidth = w;
                 ctx.beginPath();
-                ctx.moveTo(cx + cosA * 6, cy + sinA * 6);
+                ctx.moveTo(cx + cosA * 3, cy + sinA * 3);
                 ctx.lineTo(cx + cosA * (len - 1), cy + sinA * (len - 1));
                 ctx.stroke();
+                // Muzzle ring
                 ctx.fillStyle = '#222';
                 ctx.beginPath();
-                ctx.arc(cx + cosA * len, cy + sinA * len, Math.min(this.level, 4) + 1.5, 0, Math.PI * 2);
+                ctx.arc(cx + cosA * len, cy + sinA * len, w * 0.8 + 1, 0, Math.PI * 2);
+                ctx.fill();
+                // Small turret base
+                const baseR = 5 + Math.min(lvl, 4);
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(cx, cy, baseR + 1, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = dark;
+                ctx.beginPath();
+                ctx.arc(cx, cy, baseR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy, baseR - 1.5, 0, Math.PI * 2);
+                ctx.stroke();
+                // Pivot dot
+                ctx.fillStyle = '#555';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
                 ctx.fill();
                 break;
             }
-            case 'multi': {
-                const len = gs * 0.40;
-                const w = 1.0 + Math.min(this.level, 4) * 0.4;
-                const barrelCount = Math.min(this.level + 1, 5);
-                const spread = barrelCount > 3 ? 0.3 : 0.4;
-                for (let i = 0; i < barrelCount; i++) {
-                    const bAngle = this.angle + (i - (barrelCount - 1) / 2) * spread;
-                    const bc = Math.cos(bAngle), bs = Math.sin(bAngle);
-                    ctx.strokeStyle = '#222';
-                    ctx.lineWidth = w + 1.5;
+
+            case 'squirt': {
+                // Spray nozzle icon: center hub with curved spray arcs (DTD "C" shape)
+                const arcCount = 2 + Math.floor(lvl / 2);
+                for (let i = 0; i < arcCount; i++) {
+                    const dist = 7 + i * 4;
+                    const span = 0.6 + i * 0.12;
+                    const thick = 2.5 - i * 0.3;
+                    // Dark outline arc
+                    ctx.strokeStyle = '#1a4a7a';
+                    ctx.lineWidth = thick + 1.5;
                     ctx.beginPath();
-                    ctx.moveTo(cx + bc * 5, cy + bs * 5);
-                    ctx.lineTo(cx + bc * len, cy + bs * len);
+                    ctx.arc(cx, cy, dist, this.angle - span, this.angle + span);
                     ctx.stroke();
-                    ctx.strokeStyle = '#7a5a90';
-                    ctx.lineWidth = w;
+                    // Colored arc
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = thick;
                     ctx.beginPath();
-                    ctx.moveTo(cx + bc * 6, cy + bs * 6);
-                    ctx.lineTo(cx + bc * (len - 1), cy + bs * (len - 1));
+                    ctx.arc(cx, cy, dist, this.angle - span, this.angle + span);
                     ctx.stroke();
                 }
-                break;
-            }
-            case 'cone': {
-                const len = gs * 0.45;
-                const bx = cx + cosA * 5, by = cy + sinA * 5;
-                const tx = cx + cosA * len, ty = cy + sinA * len;
-                const coneW = 2.5 + Math.min(this.level, 5);
+                // Center nozzle hub
                 ctx.fillStyle = '#222';
                 ctx.beginPath();
-                ctx.moveTo(bx, by);
-                ctx.lineTo(tx + pX * coneW, ty + pY * coneW);
-                ctx.lineTo(tx - pX * coneW, ty - pY * coneW);
-                ctx.closePath();
+                ctx.arc(cx, cy, 5, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#50a0b0';
+                ctx.fillStyle = dark;
                 ctx.beginPath();
-                ctx.moveTo(bx, by);
-                ctx.lineTo(tx + pX * (coneW - 1), ty + pY * (coneW - 1));
-                ctx.lineTo(tx - pX * (coneW - 1), ty - pY * (coneW - 1));
-                ctx.closePath();
+                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#555';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2, 0, Math.PI * 2);
                 ctx.fill();
                 break;
             }
+
+            case 'dart': {
+                // Crosshair / scope reticle icon (DTD target symbol)
+                const r = 10 + Math.min(lvl, 3);
+                const ext = r + 4;
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.rotate(this.angle);
+                // Outer circle
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.stroke();
+                // Colored inner circle
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+                ctx.stroke();
+                // Cross lines (extending beyond circle with gap at center)
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-ext, 0); ctx.lineTo(-r * 0.3, 0);
+                ctx.moveTo(r * 0.3, 0); ctx.lineTo(ext, 0);
+                ctx.moveTo(0, -ext); ctx.lineTo(0, -r * 0.3);
+                ctx.moveTo(0, r * 0.3); ctx.lineTo(0, ext);
+                ctx.stroke();
+                // Center dot
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                break;
+            }
+
+            case 'swarm': {
+                // Starburst / asterisk icon (DTD multi-shot star)
+                const armCount = 4 + Math.min(Math.floor(lvl / 1.5), 4);
+                const armLen = 10 + Math.min(lvl, 3);
+                for (let i = 0; i < armCount; i++) {
+                    const a = this.angle + (i / armCount) * Math.PI * 2;
+                    const ac = Math.cos(a), as = Math.sin(a);
+                    // Dark outline
+                    ctx.strokeStyle = '#222';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(cx + ac * 4, cy + as * 4);
+                    ctx.lineTo(cx + ac * armLen, cy + as * armLen);
+                    ctx.stroke();
+                    // Colored line
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(cx + ac * 5, cy + as * 5);
+                    ctx.lineTo(cx + ac * (armLen - 1), cy + as * (armLen - 1));
+                    ctx.stroke();
+                    // Missile dot at tip
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(cx + ac * armLen, cy + as * armLen, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                // Center hub
+                ctx.fillStyle = '#222';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = dark;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
+            case 'frost': {
+                // Snowflake icon — 6 arms with branches (DTD ice symbol)
+                const armLen = 11 + Math.min(lvl, 3);
+                const branchDist = armLen * 0.55;
+                const branchLen = armLen * 0.35;
+                for (let i = 0; i < 6; i++) {
+                    const a = (i / 6) * Math.PI * 2;
+                    const ac = Math.cos(a), as = Math.sin(a);
+                    // Main arm — dark outline
+                    ctx.strokeStyle = '#183848';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(cx + ac * armLen, cy + as * armLen);
+                    ctx.stroke();
+                    // Main arm — color
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(cx + ac * armLen, cy + as * armLen);
+                    ctx.stroke();
+                    // Branches
+                    const bx = cx + ac * branchDist;
+                    const by = cy + as * branchDist;
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.5;
+                    for (const sign of [-1, 1]) {
+                        ctx.beginPath();
+                        ctx.moveTo(bx, by);
+                        ctx.lineTo(bx + Math.cos(a + sign * 1.0) * branchLen,
+                                   by + Math.sin(a + sign * 1.0) * branchLen);
+                        ctx.stroke();
+                    }
+                    // Tip dot
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(cx + ac * armLen, cy + as * armLen, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                // Center crystal
+                ctx.fillStyle = '#183848';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = dark;
+                ctx.beginPath();
+                ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+
             case 'bash': {
-                // Hammer/mace — short thick shaft with circle head
-                const len = gs * 0.35;
-                const shaftW = 2 + Math.min(this.level, 4) * 0.5;
-                const headR = 3 + Math.min(this.level, 5);
-                // Shaft
-                ctx.strokeStyle = '#222';
-                ctx.lineWidth = shaftW + 2;
+                // Heavy weight / anvil icon — large dark circle with impact lines
+                const weightR = 10 + Math.min(lvl, 4);
+                // Impact / shock lines in strike direction
+                for (let i = -2; i <= 2; i++) {
+                    const a = this.angle + i * 0.3;
+                    const startD = weightR + 2;
+                    const endD = startD + 5 - Math.abs(i);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2 - Math.abs(i) * 0.3;
+                    ctx.beginPath();
+                    ctx.moveTo(cx + Math.cos(a) * startD, cy + Math.sin(a) * startD);
+                    ctx.lineTo(cx + Math.cos(a) * endD, cy + Math.sin(a) * endD);
+                    ctx.stroke();
+                }
+                // Weight shadow
+                ctx.fillStyle = '#111';
                 ctx.beginPath();
-                ctx.moveTo(cx + cosA * 5, cy + sinA * 5);
-                ctx.lineTo(cx + cosA * len, cy + sinA * len);
-                ctx.stroke();
-                ctx.strokeStyle = '#8a6030';
-                ctx.lineWidth = shaftW;
-                ctx.beginPath();
-                ctx.moveTo(cx + cosA * 6, cy + sinA * 6);
-                ctx.lineTo(cx + cosA * (len - 1), cy + sinA * (len - 1));
-                ctx.stroke();
-                // Hammer head
-                const hx = cx + cosA * len;
-                const hy = cy + sinA * len;
-                ctx.fillStyle = '#222';
-                ctx.beginPath();
-                ctx.arc(hx, hy, headR + 1, 0, Math.PI * 2);
+                ctx.arc(cx, cy, weightR + 1.5, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = typeDef.colors.ring[this.level - 1];
+                // Weight body
+                const wGrad = ctx.createRadialGradient(cx - 2, cy - 2, weightR * 0.1, cx, cy, weightR);
+                wGrad.addColorStop(0, '#555');
+                wGrad.addColorStop(0.5, dark);
+                wGrad.addColorStop(1, '#111');
+                ctx.fillStyle = wGrad;
                 ctx.beginPath();
-                ctx.arc(hx, hy, headR, 0, Math.PI * 2);
+                ctx.arc(cx, cy, weightR, 0, Math.PI * 2);
+                ctx.fill();
+                // Colored ring accent
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, weightR - 3, 0, Math.PI * 2);
+                ctx.stroke();
+                // Inner ring
+                ctx.strokeStyle = '#444';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(cx, cy, weightR * 0.5, 0, Math.PI * 2);
+                ctx.stroke();
+                // Center bolt
+                ctx.fillStyle = '#666';
+                ctx.beginPath();
+                ctx.arc(cx, cy, 3, 0, Math.PI * 2);
                 ctx.fill();
                 break;
             }
@@ -2050,7 +2223,6 @@ class Tower {
             ctx.beginPath();
             ctx.arc(cx, cy, waveR, 0, Math.PI * 2);
             ctx.stroke();
-            // Inner flash
             if (this.bashFlashTimer > 7) {
                 ctx.fillStyle = `rgba(255, 200, 80, ${0.3 * (this.bashFlashTimer - 7) / 3})`;
                 ctx.beginPath();
@@ -2061,10 +2233,8 @@ class Tower {
 
         // Muzzle flash (skip for melee towers)
         if (!typeDef.melee && this.cooldown > this.fireRate - 4) {
-            const flashLen = typeDef.barrelStyle === 'long' ? gs * 0.60 :
-                             typeDef.barrelStyle === 'thin' ? gs * 0.42 :
-                             typeDef.barrelStyle === 'wide' ? gs * 0.48 :
-                             typeDef.barrelStyle === 'multi' ? gs * 0.40 : gs * 0.45;
+            const flashLens = { pellet: 0.52, squirt: 0.40, dart: 0.38, swarm: 0.30, frost: 0.33 };
+            const flashLen = gs * (flashLens[this.type] || 0.45);
             const tipX = cx + cosA * flashLen;
             const tipY = cy + sinA * flashLen;
             ctx.fillStyle = 'rgba(255, 200, 50, 0.6)';
@@ -2078,38 +2248,34 @@ class Tower {
         }
 
         // Level pips (type-colored)
+        const pipDist = gs * 0.45;
         const pipSpacing = this.level > 3 ? 0.5 : 0.8;
         for (let i = 0; i < this.level; i++) {
             const pipAngle = -Math.PI / 2 + (i - (this.level - 1) / 2) * pipSpacing;
-            const pipDist = outerR + 5;
-            const px = cx + Math.cos(pipAngle) * pipDist;
-            const py = cy + Math.sin(pipAngle) * pipDist;
+            const ppx = cx + Math.cos(pipAngle) * pipDist;
+            const ppy = cy + Math.sin(pipAngle) * pipDist;
             if (this.level >= MAX_TOWER_LEVEL) {
-                // Golden glow for evolved towers
                 ctx.fillStyle = 'rgba(255, 224, 100, 0.4)';
                 ctx.beginPath();
-                ctx.arc(px, py, 4, 0, Math.PI * 2);
+                ctx.arc(ppx, ppy, 4, 0, Math.PI * 2);
                 ctx.fill();
             }
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.arc(ppx, ppy, 2, 0, Math.PI * 2);
             ctx.fill();
         }
 
         // Upgrade progress indicator
         if (this.upgradeTimer > 0 && this.upgradeTotal > 0) {
             const progress = 1 - (this.upgradeTimer / this.upgradeTotal);
-            // Dark overlay
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
             ctx.fillRect(gx, gy, gs, gs);
-            // Progress arc
             ctx.strokeStyle = '#ffcc00';
             ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.arc(cx, cy, outerR - 1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+            ctx.arc(cx, cy, gs * 0.35, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
             ctx.stroke();
-            // Percentage text
             ctx.fillStyle = '#ffcc00';
             ctx.font = 'bold 10px Arial, sans-serif';
             ctx.textAlign = 'center';
@@ -2473,11 +2639,18 @@ canvas.addEventListener('click', (e) => {
     if (money >= placeCost && canPlaceTower(gridX, gridY)) {
         towers.push(new Tower(gridX * GRID_SIZE, gridY * GRID_SIZE, selectedTowerType));
         money -= placeCost;
+        // Only repath enemies whose current path crosses the new tower's 2x2 cells
+        const blocked = new Set();
+        for (let dy = 0; dy < 2; dy++)
+            for (let dx = 0; dx < 2; dx++)
+                blocked.add(`${gridX + dx},${gridY + dy}`);
         enemies.forEach(e => {
             if (e.isFlying) return;
-            const currentGridX = Math.floor(e.x / GRID_SIZE);
-            const currentGridY = Math.floor(e.y / GRID_SIZE);
-            e.path = aStar({ x: currentGridX, y: currentGridY }, e.goal);
+            if (e.path.some(p => blocked.has(`${p.x},${p.y}`))) {
+                const cx = Math.floor(e.x / GRID_SIZE);
+                const cy = Math.floor(e.y / GRID_SIZE);
+                e.path = aStar({ x: cx, y: cy }, e.goal);
+            }
         });
         selectedTower = null;
         towerPanel.style.display = 'none';
