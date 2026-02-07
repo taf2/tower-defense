@@ -26,9 +26,11 @@ const towerSounds = {
 const towerTypeButtons = document.querySelectorAll('.tower-type-btn');
 
 // Game constants
-const GRID_SIZE = 40;
-const COLS = Math.floor(canvas.width / GRID_SIZE);
-const ROWS = Math.floor(canvas.height / GRID_SIZE);
+const GRID_SIZE = 20;                // halved from 40 — pathfinding cell size
+const TOWER_PX = GRID_SIZE * 2;      // 40px — visual tower size (same as old GRID_SIZE)
+const BORDER_CELLS = 2;              // border thickness in grid cells (2*20 = 40px visual)
+const COLS = Math.floor(canvas.width / GRID_SIZE);   // 40 (was 20)
+const ROWS = Math.floor(canvas.height / GRID_SIZE);  // 30 (was 15)
 const MAX_TOWER_LEVEL = 6;
 
 // Tower type definitions
@@ -224,28 +226,42 @@ let hoverPreviewType = null;
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
 
-// Define openings and set borders
-const topOpening = Math.floor(COLS / 2);
-const leftOpening = Math.floor(ROWS / 2);
-const bottomOpening = Math.floor(COLS / 2);
-const rightOpening = Math.floor(ROWS / 2);
-for (let x = 0; x < COLS; x++) {
-    if (x !== topOpening) grid[0][x] = 1;
-}
-for (let y = 0; y < ROWS; y++) {
-    if (y !== leftOpening) grid[y][0] = 1;
-}
-for (let x = 0; x < COLS; x++) {
-    if (x !== bottomOpening) grid[ROWS - 1][x] = 1;
-}
-for (let y = 0; y < ROWS; y++) {
-    if (y !== rightOpening) grid[y][COLS - 1] = 1;
-}
+// Opening sizes in grid cells (towers are 2 cells wide)
+const TOP_OPENING_W = 8;   // 4 towers wide (8 cells × 20px = 160px)
+const SIDE_OPENING_H = 6;  // 3 towers tall (6 cells × 20px = 120px)
 
-// Entry/exit points
+// Opening start positions (centered on each wall)
+const topOpening = Math.floor((COLS - TOP_OPENING_W) / 2);     // 16
+const leftOpening = Math.floor((ROWS - SIDE_OPENING_H) / 2);   // 12
+const bottomOpening = topOpening;
+const rightOpening = leftOpening;
+
+function setupBorders() {
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+            const isTop = y < BORDER_CELLS;
+            const isBottom = y >= ROWS - BORDER_CELLS;
+            const isLeft = x < BORDER_CELLS;
+            const isRight = x >= COLS - BORDER_CELLS;
+            if (isTop || isBottom || isLeft || isRight) {
+                const inOpening =
+                    (isTop    && x >= topOpening && x < topOpening + TOP_OPENING_W) ||
+                    (isBottom && x >= bottomOpening && x < bottomOpening + TOP_OPENING_W) ||
+                    (isLeft   && y >= leftOpening && y < leftOpening + SIDE_OPENING_H) ||
+                    (isRight  && y >= rightOpening && y < rightOpening + SIDE_OPENING_H);
+                if (!inOpening) grid[y][x] = 1;
+            }
+        }
+    }
+}
+setupBorders();
+
+// Entry/exit points — A* start/goal at center cell of each opening
 const openings = {
-    top: { x: topOpening, y: 0, goal: { x: bottomOpening, y: ROWS - 1 } },
-    left: { x: 0, y: leftOpening, goal: { x: COLS - 1, y: rightOpening } }
+    top: { x: topOpening + Math.floor(TOP_OPENING_W / 2), y: 0,
+           goal: { x: bottomOpening + Math.floor(TOP_OPENING_W / 2), y: ROWS - 1 } },
+    left: { x: 0, y: leftOpening + Math.floor(SIDE_OPENING_H / 2),
+            goal: { x: COLS - 1, y: rightOpening + Math.floor(SIDE_OPENING_H / 2) } }
 };
 
 // IndexedDB Setup
@@ -269,6 +285,7 @@ dbRequest.onerror = function(event) {
 function saveGameState() {
     const state = {
         id: 'currentGame',
+        version: 2,
         money,
         score,
         baseHealth,
@@ -301,6 +318,10 @@ function loadGameState() {
 
     request.onsuccess = function(event) {
         const state = event.target.result;
+        if (state && state.version !== 2) {
+            console.log('Incompatible save (old grid format). Starting fresh.');
+            return;
+        }
         if (state) {
             money = state.money;
             score = state.score;
@@ -378,14 +399,27 @@ function aStar(start, goal) {
     return [];
 }
 
-// Check if placement blocks all paths
+// Check if placement blocks all paths (2x2 tower footprint)
 function canPlaceTower(gridX, gridY) {
-    if (grid[gridY][gridX] === 1) return false;
+    // Check all 4 cells are in bounds and open
+    for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++) {
+            const cx = gridX + dx, cy = gridY + dy;
+            if (cx < 0 || cx >= COLS || cy < 0 || cy >= ROWS) return false;
+            if (grid[cy][cx] === 1) return false;
+        }
 
-    grid[gridY][gridX] = 1;
+    // Temporarily block all 4 cells, test paths, restore
+    for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++)
+            grid[gridY + dy][gridX + dx] = 1;
+
     const topPath = aStar(openings.top, openings.top.goal);
     const leftPath = aStar(openings.left, openings.left.goal);
-    grid[gridY][gridX] = 0;
+
+    for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++)
+            grid[gridY + dy][gridX + dx] = 0;
 
     if (topPath.length === 0 || leftPath.length === 0) {
         return false;
@@ -411,9 +445,9 @@ function drawRoundedRect(x, y, w, h, r) {
     ctx.closePath();
 }
 
-function drawArrow(x, y, size, direction) {
+function drawArrow(cx, cy, size, direction) {
     ctx.save();
-    ctx.translate(x + GRID_SIZE / 2, y + GRID_SIZE / 2);
+    ctx.translate(cx, cy);
     switch (direction) {
         case 'down': ctx.rotate(Math.PI / 2); break;
         case 'up': ctx.rotate(-Math.PI / 2); break;
@@ -524,10 +558,10 @@ function drawBoard() {
     ctx.drawImage(deskBgCanvas, 0, 0);
 
     // Paper play area
-    const paperX = GRID_SIZE;
-    const paperY = GRID_SIZE;
-    const paperW = (COLS - 2) * GRID_SIZE;
-    const paperH = (ROWS - 2) * GRID_SIZE;
+    const paperX = BORDER_CELLS * GRID_SIZE;
+    const paperY = BORDER_CELLS * GRID_SIZE;
+    const paperW = (COLS - 2 * BORDER_CELLS) * GRID_SIZE;
+    const paperH = (ROWS - 2 * BORDER_CELLS) * GRID_SIZE;
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
     ctx.fillRect(paperX + 3, paperY + 3, paperW + 1, paperH + 1);
@@ -537,24 +571,13 @@ function drawBoard() {
     ctx.fillRect(paperX, paperY, paperW, 1);
     ctx.fillRect(paperX, paperY, 1, paperH);
 
-    // Grid lines
-    ctx.strokeStyle = 'rgba(160, 150, 130, 0.4)';
-    ctx.lineWidth = 0.5;
-    for (let x = 2; x < COLS - 1; x++) {
-        ctx.beginPath();
-        ctx.moveTo(x * GRID_SIZE + 0.5, paperY);
-        ctx.lineTo(x * GRID_SIZE + 0.5, paperY + paperH);
-        ctx.stroke();
-    }
-    for (let y = 2; y < ROWS - 1; y++) {
-        ctx.beginPath();
-        ctx.moveTo(paperX, y * GRID_SIZE + 0.5);
-        ctx.lineTo(paperX + paperW, y * GRID_SIZE + 0.5);
-        ctx.stroke();
-    }
-
     // Border wall edges
-    const towerPositions = new Set(towers.map(t => `${t.gridX},${t.gridY}`));
+    const towerPositions = new Set();
+    for (const t of towers) {
+        for (let dy = 0; dy < 2; dy++)
+            for (let dx = 0; dx < 2; dx++)
+                towerPositions.add(`${t.gridX + dx},${t.gridY + dy}`);
+    }
     for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
             if (grid[y][x] === 1 && !towerPositions.has(`${x},${y}`)) {
@@ -570,25 +593,39 @@ function drawBoard() {
         }
     }
 
-    // Openings
+    // Openings (wider gaps in border)
+    const topOpenW = TOP_OPENING_W * GRID_SIZE;
+    const sideOpenH = SIDE_OPENING_H * GRID_SIZE;
+    const borderPx = BORDER_CELLS * GRID_SIZE;
     ctx.fillStyle = '#ece6d0';
-    ctx.fillRect(topOpening * GRID_SIZE, 0, GRID_SIZE, GRID_SIZE);
-    ctx.fillRect(bottomOpening * GRID_SIZE, (ROWS - 1) * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-    ctx.fillRect(0, leftOpening * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-    ctx.fillRect((COLS - 1) * GRID_SIZE, rightOpening * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+    ctx.fillRect(topOpening * GRID_SIZE, 0, topOpenW, borderPx);
+    ctx.fillRect(bottomOpening * GRID_SIZE, (ROWS - BORDER_CELLS) * GRID_SIZE, topOpenW, borderPx);
+    ctx.fillRect(0, leftOpening * GRID_SIZE, borderPx, sideOpenH);
+    ctx.fillRect((COLS - BORDER_CELLS) * GRID_SIZE, rightOpening * GRID_SIZE, borderPx, sideOpenH);
 
+    // Arrows centered on openings
+    const topCx = topOpening * GRID_SIZE + topOpenW / 2;
+    const leftCy = leftOpening * GRID_SIZE + sideOpenH / 2;
+    const borderMid = borderPx / 2;
     ctx.fillStyle = 'rgba(76, 175, 80, 0.6)';
-    drawArrow(topOpening * GRID_SIZE, 0, 8, 'down');
-    drawArrow(0, leftOpening * GRID_SIZE, 8, 'right');
+    drawArrow(topCx, borderMid, 8, 'down');
+    drawArrow(borderMid, leftCy, 8, 'right');
     ctx.fillStyle = 'rgba(200, 60, 50, 0.5)';
-    drawArrow(bottomOpening * GRID_SIZE, (ROWS - 1) * GRID_SIZE, 8, 'down');
-    drawArrow((COLS - 1) * GRID_SIZE, rightOpening * GRID_SIZE, 8, 'right');
+    drawArrow(topCx, (ROWS - BORDER_CELLS) * GRID_SIZE + borderMid, 8, 'down');
+    drawArrow((COLS - BORDER_CELLS) * GRID_SIZE + borderMid, leftCy, 8, 'right');
 
-    // Hover highlight
+    // Hover highlight (2x2 tower preview)
     if (hoverCell && !gameOver) {
         const hx = hoverCell.x * GRID_SIZE;
         const hy = hoverCell.y * GRID_SIZE;
-        if (grid[hoverCell.y][hoverCell.x] === 0) {
+        // Check if all 4 cells of the 2x2 block are open
+        let allOpen = true;
+        for (let dy = 0; dy < 2; dy++)
+            for (let dx = 0; dx < 2; dx++) {
+                const cx = hoverCell.x + dx, cy = hoverCell.y + dy;
+                if (cx >= COLS || cy >= ROWS || grid[cy][cx] !== 0) allOpen = false;
+            }
+        if (allOpen) {
             const placeCost = TOWER_TYPES[selectedTowerType].cost;
             if (money >= placeCost) {
                 ctx.fillStyle = 'rgba(76, 175, 80, 0.15)';
@@ -597,17 +634,17 @@ function drawBoard() {
                 ctx.fillStyle = 'rgba(200, 50, 50, 0.12)';
                 ctx.strokeStyle = 'rgba(200, 50, 50, 0.3)';
             }
-            ctx.fillRect(hx, hy, GRID_SIZE, GRID_SIZE);
+            ctx.fillRect(hx, hy, TOWER_PX, TOWER_PX);
             ctx.lineWidth = 1;
             ctx.setLineDash([4, 3]);
-            ctx.strokeRect(hx + 1, hy + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+            ctx.strokeRect(hx + 1, hy + 1, TOWER_PX - 2, TOWER_PX - 2);
             ctx.setLineDash([]);
 
-            // Range preview circle
+            // Range preview circle centered on 2x2 block
             if (money >= placeCost) {
                 const previewRange = TOWER_TYPES[selectedTowerType].levels[0].range;
                 ctx.beginPath();
-                ctx.arc(hx + GRID_SIZE / 2, hy + GRID_SIZE / 2, previewRange, 0, Math.PI * 2);
+                ctx.arc(hx + TOWER_PX / 2, hy + TOWER_PX / 2, previewRange, 0, Math.PI * 2);
                 ctx.strokeStyle = 'rgba(255, 220, 50, 0.2)';
                 ctx.lineWidth = 1;
                 ctx.setLineDash([4, 4]);
@@ -615,8 +652,14 @@ function drawBoard() {
                 ctx.setLineDash([]);
             }
         } else if (towerPositions.has(`${hoverCell.x},${hoverCell.y}`)) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-            ctx.fillRect(hx, hy, GRID_SIZE, GRID_SIZE);
+            // Find the tower that owns this cell and highlight its full 2x2 area
+            const ownerTower = towers.find(t =>
+                hoverCell.x >= t.gridX && hoverCell.x < t.gridX + 2 &&
+                hoverCell.y >= t.gridY && hoverCell.y < t.gridY + 2);
+            if (ownerTower) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.fillRect(ownerTower.gridX * GRID_SIZE, ownerTower.gridY * GRID_SIZE, TOWER_PX, TOWER_PX);
+            }
         }
     }
 }
@@ -851,8 +894,14 @@ class Enemy {
         this.spawnDirection = Math.random() < 0.5 ? 'top' : 'left';
         this.start = openings[this.spawnDirection];
         this.goal = openings[this.spawnDirection].goal;
-        this.x = this.start.x * GRID_SIZE + GRID_SIZE / 2;
-        this.y = this.start.y * GRID_SIZE + GRID_SIZE / 2;
+        // Spawn at center of the wider opening
+        if (this.spawnDirection === 'top') {
+            this.x = topOpening * GRID_SIZE + (TOP_OPENING_W * GRID_SIZE) / 2;
+            this.y = GRID_SIZE; // center of border depth
+        } else {
+            this.x = GRID_SIZE;
+            this.y = leftOpening * GRID_SIZE + (SIDE_OPENING_H * GRID_SIZE) / 2;
+        }
         this.isBoss = isBoss;
 
         // HP scales with level and type
@@ -888,8 +937,14 @@ class Enemy {
 
         // Flying enemies go straight to exit, ignoring maze
         if (this.isFlying) {
-            this.flyTargetX = this.goal.x * GRID_SIZE + GRID_SIZE / 2;
-            this.flyTargetY = this.goal.y * GRID_SIZE + GRID_SIZE / 2;
+            // Fly to center of exit opening
+            if (this.spawnDirection === 'top') {
+                this.flyTargetX = bottomOpening * GRID_SIZE + (TOP_OPENING_W * GRID_SIZE) / 2;
+                this.flyTargetY = (ROWS - 1) * GRID_SIZE + GRID_SIZE;
+            } else {
+                this.flyTargetX = (COLS - 1) * GRID_SIZE + GRID_SIZE;
+                this.flyTargetY = rightOpening * GRID_SIZE + (SIDE_OPENING_H * GRID_SIZE) / 2;
+            }
             this.path = []; // empty path — uses fly logic
         } else {
             this.path = aStar(this.start, this.goal);
@@ -1552,8 +1607,9 @@ class Tower {
         this.type = type;
         this.gridX = Math.floor(x / GRID_SIZE);
         this.gridY = Math.floor(y / GRID_SIZE);
-        this.x = this.gridX * GRID_SIZE + GRID_SIZE / 2;
-        this.y = this.gridY * GRID_SIZE + GRID_SIZE / 2;
+        // Center of the 2x2 block
+        this.x = this.gridX * GRID_SIZE + TOWER_PX / 2;
+        this.y = this.gridY * GRID_SIZE + TOWER_PX / 2;
 
         const typeDef = TOWER_TYPES[this.type];
         const stats = typeDef.levels[0];
@@ -1567,7 +1623,10 @@ class Tower {
         this.upgradeTimer = 0;
         this.upgradeTotal = 0;
         this.pendingLevel = null;
-        grid[this.gridY][this.gridX] = 1;
+        // Mark all 4 cells as blocked
+        for (let dy = 0; dy < 2; dy++)
+            for (let dx = 0; dx < 2; dx++)
+                grid[this.gridY + dy][this.gridX + dx] = 1;
     }
 
     upgrade() {
@@ -1606,7 +1665,10 @@ class Tower {
     sell() {
         const sellValue = Math.floor(this.totalCost * 0.6);
         money += sellValue;
-        grid[this.gridY][this.gridX] = 0;
+        // Release all 4 cells
+        for (let dy = 0; dy < 2; dy++)
+            for (let dx = 0; dx < 2; dx++)
+                grid[this.gridY + dy][this.gridX + dx] = 0;
         towers = towers.filter(t => t !== this);
         selectedTower = null;
         towerPanel.style.display = 'none';
@@ -1765,9 +1827,9 @@ class Tower {
     draw() {
         const cx = this.x;
         const cy = this.y;
-        const gs = GRID_SIZE;
-        const gx = this.gridX * gs;
-        const gy = this.gridY * gs;
+        const gs = TOWER_PX;              // 40px visual size
+        const gx = this.gridX * GRID_SIZE; // pixel position from 20px grid
+        const gy = this.gridY * GRID_SIZE;
         const typeDef = TOWER_TYPES[this.type];
 
         // Range indicator (yellow, classic DTD)
@@ -2130,14 +2192,7 @@ function resetGame() {
     selectedEnemy = null;
     floatingTexts = [];
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
-    for (let x = 0; x < COLS; x++) {
-        if (x !== topOpening) grid[0][x] = 1;
-        if (x !== bottomOpening) grid[ROWS - 1][x] = 1;
-    }
-    for (let y = 0; y < ROWS; y++) {
-        if (y !== leftOpening) grid[y][0] = 1;
-        if (y !== rightOpening) grid[y][COLS - 1] = 1;
-    }
+    setupBorders();
     towerPanel.style.display = 'none';
     startButton.disabled = false;
     nextWaveButton.disabled = true;
@@ -2399,12 +2454,14 @@ canvas.addEventListener('click', (e) => {
     }
     selectedEnemy = null;
 
-    if (gridY === 0 || gridY === ROWS - 1 || gridX === 0 || gridX === COLS - 1) return;
-    if ((gridX === topOpening && gridY === 0) || (gridX === 0 && gridY === leftOpening) ||
-        (gridX === bottomOpening && gridY === ROWS - 1) || (gridX === COLS - 1 && gridY === rightOpening)) return;
+    // Border check for 2x2 tower: top-left cell must allow full 2x2 inside playable area
+    if (gridX < BORDER_CELLS || gridX + 1 >= COLS - BORDER_CELLS ||
+        gridY < BORDER_CELLS || gridY + 1 >= ROWS - BORDER_CELLS) return;
 
+    // Check if clicking on an existing tower's 2x2 area
     for (let tower of towers) {
-        if (tower.gridX === gridX && tower.gridY === gridY) {
+        if (gridX >= tower.gridX && gridX < tower.gridX + 2 &&
+            gridY >= tower.gridY && gridY < tower.gridY + 2) {
             selectedTower = tower;
             updateTowerPanel();
             e.stopPropagation();
@@ -2413,8 +2470,8 @@ canvas.addEventListener('click', (e) => {
     }
 
     const placeCost = TOWER_TYPES[selectedTowerType].cost;
-    if (money >= placeCost && grid[gridY][gridX] === 0 && canPlaceTower(gridX, gridY)) {
-        towers.push(new Tower(x, y, selectedTowerType));
+    if (money >= placeCost && canPlaceTower(gridX, gridY)) {
+        towers.push(new Tower(gridX * GRID_SIZE, gridY * GRID_SIZE, selectedTowerType));
         money -= placeCost;
         enemies.forEach(e => {
             if (e.isFlying) return;
@@ -2434,7 +2491,8 @@ canvas.addEventListener('mousemove', (e) => {
     const y = e.clientY - rect.top;
     const gridX = Math.floor(x / GRID_SIZE);
     const gridY = Math.floor(y / GRID_SIZE);
-    if (gridX >= 1 && gridX < COLS - 1 && gridY >= 1 && gridY < ROWS - 1) {
+    if (gridX >= BORDER_CELLS && gridX + 1 < COLS - BORDER_CELLS &&
+        gridY >= BORDER_CELLS && gridY + 1 < ROWS - BORDER_CELLS) {
         hoverCell = { x: gridX, y: gridY };
     } else {
         hoverCell = null;
