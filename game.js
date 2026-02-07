@@ -2340,7 +2340,7 @@ function gameLoop(timestamp) {
     drawHUD();
     drawWaveBar();
 
-    if (!gameStarted) {
+    if (!gameStarted && towers.length === 0) {
         drawOverlayMessage('-DesktopTowerDefense-', 'Click "Start Game" to begin', '#ece6d0');
     }
 
