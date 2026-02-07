@@ -7,5 +7,6 @@ Sound credit to ElevenLabs
 
 Further enhanced with opus 4.6
 
+<img width="1040" height="822" alt="gameplay" src="https://github.com/user-attachments/assets/19e37c54-1955-44de-bd9d-d1ead5973a50" />
 
 
