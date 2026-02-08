@@ -495,6 +495,10 @@ let projectileListDirty = false;
 let frameNow = 0;
 let touchActive = false; // suppress click after touch
 let touchDragging = false; // true while finger is on canvas during tower placement
+let adjustableTower = null; // tower that can still be moved after placement (mobile)
+let adjustableTimer = 0;    // frames remaining in adjust window
+let adjustDragging = false;  // true when actively dragging the adjustable tower
+const ADJUST_WINDOW = 300;  // 5 seconds at 60fps
 
 // Mobile detection
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -1875,31 +1879,99 @@ function drawWaveBar() {
     ctx.textBaseline = 'alphabetic';
 }
 
+// Draw grid lines over play area during mobile tower placement
+function drawPlacementGrid() {
+    if (!touchDragging && !adjustableTower) return;
+    if (!selectedTowerType && !adjustableTower) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 0.5;
+    const x0 = BORDER_CELLS * GRID_SIZE;
+    const y0 = BORDER_CELLS * GRID_SIZE;
+    const x1 = (COLS - BORDER_CELLS) * GRID_SIZE;
+    const y1 = (ROWS - BORDER_CELLS) * GRID_SIZE;
+    for (let gx = BORDER_CELLS; gx <= COLS - BORDER_CELLS; gx++) {
+        ctx.beginPath();
+        ctx.moveTo(gx * GRID_SIZE, y0);
+        ctx.lineTo(gx * GRID_SIZE, y1);
+        ctx.stroke();
+    }
+    for (let gy = BORDER_CELLS; gy <= ROWS - BORDER_CELLS; gy++) {
+        ctx.beginPath();
+        ctx.moveTo(x0, gy * GRID_SIZE);
+        ctx.lineTo(x1, gy * GRID_SIZE);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
+// Draw visual indicator for adjustable tower (post-placement mobile window)
+function drawAdjustableTower() {
+    if (!adjustableTower) return;
+    // Tick down the timer
+    if (!gamePaused) {
+        adjustableTimer--;
+        if (adjustableTimer <= 0) {
+            adjustableTower = null;
+            adjustableTimer = 0;
+            return;
+        }
+    }
+    const t = adjustableTower;
+    const tx = t.gridX * GRID_SIZE;
+    const ty = t.gridY * GRID_SIZE;
+    // Pulsing highlight border
+    const pulse = 0.4 + 0.3 * Math.sin(Date.now() / 200);
+    ctx.strokeStyle = `rgba(255, 220, 50, ${pulse})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tx + 1, ty + 1, TOWER_PX - 2, TOWER_PX - 2);
+    // Timer bar underneath
+    const pct = adjustableTimer / ADJUST_WINDOW;
+    const barW = TOWER_PX * pct;
+    ctx.fillStyle = `rgba(255, 220, 50, 0.6)`;
+    ctx.fillRect(tx, ty + TOWER_PX + 2, barW, 3);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(tx + barW, ty + TOWER_PX + 2, TOWER_PX - barW, 3);
+    // Range circle
+    const typeDef = TOWER_TYPES[t.type];
+    const range = typeDef.levels[t.level - 1].range;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, range, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 220, 50, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
 // Draw hover preview on top of everything (except HUD/wave bar)
 function drawHoverPreview() {
     if (!hoverCell || gameOver) return;
     const hx = hoverCell.x * GRID_SIZE;
     const hy = hoverCell.y * GRID_SIZE;
 
+    // Determine if we're placing a new tower or adjusting an existing one
+    const isAdjusting = adjustDragging && adjustableTower;
+    const previewType = isAdjusting ? adjustableTower.type : selectedTowerType;
+
     // Check if all 4 cells of the 2x2 block are open
-    let allOpen = selectedTowerType ? true : false;
-    if (selectedTowerType) {
+    let allOpen = previewType ? true : false;
+    if (previewType) {
         for (let dy = 0; dy < 2; dy++)
             for (let dx = 0; dx < 2; dx++) {
                 const cx = hoverCell.x + dx, cy = hoverCell.y + dy;
-                if (cx >= COLS || cy >= ROWS || grid[cy][cx] !== 0) allOpen = false;
+                if (cx >= COLS || cy >= ROWS) { allOpen = false; continue; }
+                // When adjusting, the tower's own cells count as open
+                if (isAdjusting &&
+                    cx >= adjustableTower.gridX && cx < adjustableTower.gridX + 2 &&
+                    cy >= adjustableTower.gridY && cy < adjustableTower.gridY + 2) continue;
+                if (grid[cy][cx] !== 0) allOpen = false;
             }
     }
 
     if (allOpen) {
-        const placeCost = TOWER_TYPES[selectedTowerType].cost;
-        if (money >= placeCost) {
-            ctx.fillStyle = 'rgba(76, 175, 80, 0.25)';
-            ctx.strokeStyle = 'rgba(76, 175, 80, 0.6)';
-        } else {
-            ctx.fillStyle = 'rgba(200, 50, 50, 0.2)';
-            ctx.strokeStyle = 'rgba(200, 50, 50, 0.5)';
-        }
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.25)';
+        ctx.strokeStyle = 'rgba(76, 175, 80, 0.6)';
         ctx.fillRect(hx, hy, TOWER_PX, TOWER_PX);
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 3]);
@@ -1907,16 +1979,30 @@ function drawHoverPreview() {
         ctx.setLineDash([]);
 
         // Range preview circle centered on 2x2 block
-        if (money >= placeCost) {
-            const previewRange = TOWER_TYPES[selectedTowerType].levels[0].range;
-            ctx.beginPath();
-            ctx.arc(hx + TOWER_PX / 2, hy + TOWER_PX / 2, previewRange, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(255, 220, 50, 0.25)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 4]);
-            ctx.stroke();
-            ctx.setLineDash([]);
+        const typeDef = TOWER_TYPES[previewType];
+        const previewLevel = isAdjusting ? adjustableTower.level - 1 : 0;
+        const previewRange = typeDef.levels[previewLevel].range;
+        const bold = touchDragging || adjustableTower;
+        ctx.beginPath();
+        ctx.arc(hx + TOWER_PX / 2, hy + TOWER_PX / 2, previewRange, 0, Math.PI * 2);
+        ctx.strokeStyle = bold ? 'rgba(255, 220, 50, 0.5)' : 'rgba(255, 220, 50, 0.25)';
+        ctx.lineWidth = bold ? 2 : 1;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (bold) {
+            ctx.fillStyle = 'rgba(255, 220, 50, 0.06)';
+            ctx.fill();
         }
+    } else if (previewType) {
+        // Can't place here — show red
+        ctx.fillStyle = 'rgba(200, 50, 50, 0.2)';
+        ctx.strokeStyle = 'rgba(200, 50, 50, 0.5)';
+        ctx.fillRect(hx, hy, TOWER_PX, TOWER_PX);
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(hx + 1, hy + 1, TOWER_PX - 2, TOWER_PX - 2);
+        ctx.setLineDash([]);
     } else {
         // Highlight existing tower's 2x2 area on hover
         const ownerTower = towers.find(t =>
@@ -2730,6 +2816,8 @@ function resetGame() {
     currentWaveType = 'normal';
     selectedEnemy = null;
     floatingTexts = [];
+    adjustableTower = null;
+    adjustableTimer = 0;
     grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
     setupBorders();
     invalidatePathCache();
@@ -2889,8 +2977,10 @@ function gameLoop(timestamp) {
     processPendingEnemyDeaths();
     compactAliveEntities();
 
-    // Hover preview drawn on top of enemies/towers/projectiles
+    // Grid lines + hover preview drawn on top of enemies/towers/projectiles
+    drawPlacementGrid();
     drawHoverPreview();
+    drawAdjustableTower();
 
     // Floating text
     if (!gamePaused) updateFloatingTexts();
@@ -3027,6 +3117,46 @@ canvas.addEventListener('mouseleave', () => {
     hoverCell = null;
 });
 
+// Move an adjustable tower to a new grid position
+function moveAdjustableTower(newGridX, newGridY) {
+    const t = adjustableTower;
+    if (!t) return false;
+    if (newGridX === t.gridX && newGridY === t.gridY) return true; // same spot
+    // Release old cells
+    for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++)
+            grid[t.gridY + dy][t.gridX + dx] = 0;
+    // Check if new position is valid
+    if (!canPlaceTower(newGridX, newGridY)) {
+        // Restore old cells
+        for (let dy = 0; dy < 2; dy++)
+            for (let dx = 0; dx < 2; dx++)
+                grid[t.gridY + dy][t.gridX + dx] = 1;
+        return false;
+    }
+    // Place at new position
+    t.gridX = newGridX;
+    t.gridY = newGridY;
+    t.x = newGridX * GRID_SIZE + TOWER_PX / 2;
+    t.y = newGridY * GRID_SIZE + TOWER_PX / 2;
+    for (let dy = 0; dy < 2; dy++)
+        for (let dx = 0; dx < 2; dx++)
+            grid[newGridY + dy][newGridX + dx] = 1;
+    invalidatePathCache();
+    markBoardVisualDirty();
+    // Repath enemies whose path crosses the new position
+    enemies.forEach(e => {
+        if (!e.alive || e.isFlying) return;
+        if (pathIntersectsPlacement(e.path, e.pathIndex, newGridX, newGridY)) {
+            const cx = Math.floor(e.x / GRID_SIZE);
+            const cy = Math.floor(e.y / GRID_SIZE);
+            e.path = aStar({ x: cx, y: cy }, e.goal);
+            e.pathIndex = 0;
+        }
+    });
+    return true;
+}
+
 // Update hoverCell from touch coordinates (no offset - direct position)
 function updateHoverFromTouch(touch) {
     const { x, y } = canvasCoords(touch.clientX, touch.clientY);
@@ -3040,6 +3170,7 @@ function updateHoverFromTouch(touch) {
     }
 }
 
+// Returns: placed Tower object if a tower was placed, true for other actions, false if nothing happened
 function handleCanvasAction(x, y, gridX, gridY) {
     // Shared logic for click/touchend placement and selection
     selectedEnemy = null;
@@ -3060,7 +3191,8 @@ function handleCanvasAction(x, y, gridX, gridY) {
     if (selectedTowerType && inPlayArea) {
         const placeCost = TOWER_TYPES[selectedTowerType].cost;
         if (money >= placeCost && canPlaceTower(gridX, gridY)) {
-            towers.push(new Tower(gridX * GRID_SIZE, gridY * GRID_SIZE, selectedTowerType));
+            const newTower = new Tower(gridX * GRID_SIZE, gridY * GRID_SIZE, selectedTowerType);
+            towers.push(newTower);
             money -= placeCost;
             invalidatePathCache();
             enemies.forEach(e => {
@@ -3074,7 +3206,7 @@ function handleCanvasAction(x, y, gridX, gridY) {
             });
             selectedTower = null;
             towerPanel.style.display = 'none';
-            return true;
+            return newTower;
         }
     }
 
@@ -3094,13 +3226,30 @@ function handleCanvasAction(x, y, gridX, gridY) {
 
 // Touch events for mobile tower placement
 // UX: touch down → show preview, drag → preview follows, release on canvas → place,
-//      drag off valid area → cancel (no placement)
+//      drag off valid area → cancel. After placing, 5s adjust window to drag-move tower.
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     touchActive = true;
     if (gameOver) return;
     const touch = e.touches[0];
+    const { x, y } = canvasCoords(touch.clientX, touch.clientY);
+    const gridX = Math.floor(x / GRID_SIZE);
+    const gridY = Math.floor(y / GRID_SIZE);
+
+    // Check if tapping the adjustable tower to drag it
+    if (adjustableTower &&
+        gridX >= adjustableTower.gridX && gridX < adjustableTower.gridX + 2 &&
+        gridY >= adjustableTower.gridY && gridY < adjustableTower.gridY + 2) {
+        touchDragging = true;
+        adjustDragging = true;
+        updateHoverFromTouch(touch);
+        return;
+    }
+
+    // Starting a new placement clears adjust window
     if (selectedTowerType) {
+        adjustableTower = null;
+        adjustableTimer = 0;
         touchDragging = true;
         updateHoverFromTouch(touch);
     }
@@ -3110,7 +3259,7 @@ canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
     if (gameOver) return;
     const touch = e.touches[0];
-    if (touchDragging && selectedTowerType) {
+    if (touchDragging || adjustDragging) {
         updateHoverFromTouch(touch);
     }
 }, { passive: false });
@@ -3122,9 +3271,23 @@ canvas.addEventListener('touchend', (e) => {
     const touch = e.changedTouches[0];
     const { x, y } = canvasCoords(touch.clientX, touch.clientY);
 
+    if (adjustDragging && adjustableTower && hoverCell) {
+        // Moving an existing adjustable tower
+        moveAdjustableTower(hoverCell.x, hoverCell.y);
+        hoverCell = null;
+        touchDragging = false;
+        adjustDragging = false;
+        return;
+    }
+
     if (touchDragging && selectedTowerType && hoverCell) {
         // Place tower at the current hover cell
-        handleCanvasAction(x, y, hoverCell.x, hoverCell.y);
+        const result = handleCanvasAction(x, y, hoverCell.x, hoverCell.y);
+        if (result && typeof result === 'object') {
+            // Tower was placed — start adjust window
+            adjustableTower = result;
+            adjustableTimer = ADJUST_WINDOW;
+        }
     } else if (!touchDragging || !selectedTowerType) {
         // No tower type selected: tap to select existing tower or enemy
         const gridX = Math.floor(x / GRID_SIZE);
@@ -3134,11 +3297,13 @@ canvas.addEventListener('touchend', (e) => {
     // If hoverCell was null (finger dragged off valid area), nothing is placed
     hoverCell = null;
     touchDragging = false;
+    adjustDragging = false;
 }, { passive: false });
 
 canvas.addEventListener('touchcancel', (e) => {
     hoverCell = null;
     touchDragging = false;
+    adjustDragging = false;
 }, { passive: false });
 
 // Right-click to deselect tower placement mode
