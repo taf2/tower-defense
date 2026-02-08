@@ -493,6 +493,23 @@ let pendingEnemyDeaths = [];
 let enemyListDirty = false;
 let projectileListDirty = false;
 let frameNow = 0;
+let touchActive = false; // suppress click after touch
+let touchFingerPos = null; // {x, y} in canvas coords during active touch drag
+
+// Mobile detection
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 0 && window.innerWidth <= 860);
+
+// Translate client coordinates to canvas coordinates (handles CSS scaling)
+function canvasCoords(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+    };
+}
 
 // Grid for pathfinding (0 = open, 1 = blocked)
 let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
@@ -1900,6 +1917,22 @@ function drawHoverPreview() {
             ctx.stroke();
             ctx.setLineDash([]);
         }
+        // Touch indicator: line from preview to finger position
+        if (touchFingerPos) {
+            ctx.beginPath();
+            ctx.moveTo(hx + TOWER_PX / 2, hy + TOWER_PX);
+            ctx.lineTo(touchFingerPos.x, touchFingerPos.y);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Small dot at finger position
+            ctx.beginPath();
+            ctx.arc(touchFingerPos.x, touchFingerPos.y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fill();
+        }
     } else {
         // Highlight existing tower's 2x2 area on hover
         const ownerTower = towers.find(t =>
@@ -2969,73 +3002,20 @@ towerTypeButtons.forEach(btn => {
 // Place or select tower on canvas click
 canvas.addEventListener('click', (e) => {
     if (gameOver) return;
+    // Suppress click that fires after touchend to avoid double-action
+    if (touchActive) { touchActive = false; return; }
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = canvasCoords(e.clientX, e.clientY);
     const gridX = Math.floor(x / GRID_SIZE);
     const gridY = Math.floor(y / GRID_SIZE);
-
-    selectedEnemy = null;
-
-    // Border check for 2x2 tower: top-left cell must allow full 2x2 inside playable area
-    const inPlayArea = gridX >= BORDER_CELLS && gridX + 1 < COLS - BORDER_CELLS &&
-        gridY >= BORDER_CELLS && gridY + 1 < ROWS - BORDER_CELLS;
-
-    if (inPlayArea) {
-        // Check if clicking on an existing tower's 2x2 area
-        for (let tower of towers) {
-            if (gridX >= tower.gridX && gridX < tower.gridX + 2 &&
-                gridY >= tower.gridY && gridY < tower.gridY + 2) {
-                selectedTower = tower;
-                updateTowerPanel();
-                e.stopPropagation();
-                return;
-            }
-        }
-    }
-
-    // Try tower placement first (takes priority over enemy selection)
-    if (selectedTowerType && inPlayArea) {
-        const placeCost = TOWER_TYPES[selectedTowerType].cost;
-        if (money >= placeCost && canPlaceTower(gridX, gridY)) {
-            towers.push(new Tower(gridX * GRID_SIZE, gridY * GRID_SIZE, selectedTowerType));
-            money -= placeCost;
-            invalidatePathCache();
-            // Only repath enemies whose current path crosses the new tower's 2x2 cells
-            enemies.forEach(e => {
-                if (!e.alive || e.isFlying) return;
-                if (pathIntersectsPlacement(e.path, e.pathIndex, gridX, gridY)) {
-                    const cx = Math.floor(e.x / GRID_SIZE);
-                    const cy = Math.floor(e.y / GRID_SIZE);
-                    e.path = aStar({ x: cx, y: cy }, e.goal);
-                    e.pathIndex = 0;
-                }
-            });
-            selectedTower = null;
-            towerPanel.style.display = 'none';
-            return;
-        }
-    }
-
-    // Fallback: check if clicking an enemy (only when not placing a tower)
-    for (let enemy of enemies) {
-        if (!enemy.alive) continue;
-        const edx = enemy.x - x;
-        const edy = enemy.y - y;
-        const clickRadius = enemy.size / 2 + 5;
-        if (edx * edx + edy * edy <= clickRadius * clickRadius) {
-            selectedEnemy = enemy;
-            return;
-        }
+    if (handleCanvasAction(x, y, gridX, gridY)) {
+        e.stopPropagation();
     }
 });
 
 // Mouse tracking for hover effect
 canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = canvasCoords(e.clientX, e.clientY);
     const gridX = Math.floor(x / GRID_SIZE);
     const gridY = Math.floor(y / GRID_SIZE);
     if (gridX >= BORDER_CELLS && gridX + 1 < COLS - BORDER_CELLS &&
@@ -3049,6 +3029,119 @@ canvas.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseleave', () => {
     hoverCell = null;
 });
+
+// Touch offset: preview appears above finger (in canvas pixels)
+const TOUCH_OFFSET_Y = 3 * GRID_SIZE; // 60px above finger
+
+function handleTouchPreview(touch) {
+    const { x, y } = canvasCoords(touch.clientX, touch.clientY);
+    touchFingerPos = { x, y };
+    // Offset upward so preview is visible above fingertip
+    const offsetY = y - TOUCH_OFFSET_Y;
+    const gridX = Math.floor(x / GRID_SIZE);
+    const gridY = Math.floor(Math.max(0, offsetY) / GRID_SIZE);
+    if (gridX >= BORDER_CELLS && gridX + 1 < COLS - BORDER_CELLS &&
+        gridY >= BORDER_CELLS && gridY + 1 < ROWS - BORDER_CELLS) {
+        hoverCell = { x: gridX, y: gridY };
+    } else {
+        hoverCell = null;
+    }
+}
+
+function handleCanvasAction(x, y, gridX, gridY) {
+    // Shared logic for click/touchend placement and selection
+    selectedEnemy = null;
+    const inPlayArea = gridX >= BORDER_CELLS && gridX + 1 < COLS - BORDER_CELLS &&
+        gridY >= BORDER_CELLS && gridY + 1 < ROWS - BORDER_CELLS;
+
+    if (inPlayArea) {
+        for (let tower of towers) {
+            if (gridX >= tower.gridX && gridX < tower.gridX + 2 &&
+                gridY >= tower.gridY && gridY < tower.gridY + 2) {
+                selectedTower = tower;
+                updateTowerPanel();
+                return true;
+            }
+        }
+    }
+
+    if (selectedTowerType && inPlayArea) {
+        const placeCost = TOWER_TYPES[selectedTowerType].cost;
+        if (money >= placeCost && canPlaceTower(gridX, gridY)) {
+            towers.push(new Tower(gridX * GRID_SIZE, gridY * GRID_SIZE, selectedTowerType));
+            money -= placeCost;
+            invalidatePathCache();
+            enemies.forEach(e => {
+                if (!e.alive || e.isFlying) return;
+                if (pathIntersectsPlacement(e.path, e.pathIndex, gridX, gridY)) {
+                    const cx = Math.floor(e.x / GRID_SIZE);
+                    const cy = Math.floor(e.y / GRID_SIZE);
+                    e.path = aStar({ x: cx, y: cy }, e.goal);
+                    e.pathIndex = 0;
+                }
+            });
+            selectedTower = null;
+            towerPanel.style.display = 'none';
+            return true;
+        }
+    }
+
+    // Check enemy selection
+    for (let enemy of enemies) {
+        if (!enemy.alive) continue;
+        const edx = enemy.x - x;
+        const edy = enemy.y - y;
+        const clickRadius = enemy.size / 2 + 5;
+        if (edx * edx + edy * edy <= clickRadius * clickRadius) {
+            selectedEnemy = enemy;
+            return true;
+        }
+    }
+    return false;
+}
+
+// Touch events for mobile tower placement
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    touchActive = true;
+    if (gameOver) return;
+    const touch = e.touches[0];
+    if (selectedTowerType) {
+        handleTouchPreview(touch);
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (gameOver) return;
+    const touch = e.touches[0];
+    if (selectedTowerType) {
+        handleTouchPreview(touch);
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    touchActive = true;
+    if (gameOver) return;
+    const touch = e.changedTouches[0];
+    const { x, y } = canvasCoords(touch.clientX, touch.clientY);
+
+    if (selectedTowerType && hoverCell) {
+        // Place at the offset hover position, not finger position
+        const gridX = hoverCell.x;
+        const gridY = hoverCell.y;
+        // Use hoverCell canvas coords for action
+        handleCanvasAction(hoverCell.x * GRID_SIZE + GRID_SIZE, hoverCell.y * GRID_SIZE + GRID_SIZE, gridX, gridY);
+    } else {
+        // No tower selected: tap to select tower/enemy at finger position
+        const gridX = Math.floor(x / GRID_SIZE);
+        const gridY = Math.floor(y / GRID_SIZE);
+        handleCanvasAction(x, y, gridX, gridY);
+    }
+    hoverCell = null;
+    touchFingerPos = null;
+}, { passive: false });
 
 // Right-click to deselect tower placement mode
 canvas.addEventListener('contextmenu', (e) => {
