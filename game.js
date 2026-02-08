@@ -24,6 +24,10 @@ const towerSounds = {
     bash:   document.getElementById('sound-bash'),
 };
 const towerTypeButtons = document.querySelectorAll('.tower-type-btn');
+const statLives = document.getElementById('statLives');
+const statGold = document.getElementById('statGold');
+const statScore = document.getElementById('statScore');
+const statWave = document.getElementById('statWave');
 
 const SOUND_POOL_CONFIG = {
     enemyDeath: { source: enemyDeathSound, channels: 8, minGapMs: 14, gain: 0.58, maxVoices: 7, priority: 5 },
@@ -1625,38 +1629,40 @@ function drawHUD() {
     ctx.textBaseline = 'middle';
     const y = 13;
 
+    ctx.fillStyle = '#00ccff';
+    ctx.fillText(`Level: ${level}`, 12, y);
+
     ctx.fillStyle = '#ffffff';
     if (gameStarted && waveTimer > 0) {
-        ctx.fillText(`Time: ${Math.ceil(waveTimer)}`, 12, y);
-    } else {
-        ctx.fillText('Time: --', 12, y);
-    }
-
-    ctx.fillStyle = '#00ccff';
-    ctx.fillText(`Level: ${level}`, 120, y);
-
-    ctx.fillStyle = '#00ff00';
-    ctx.fillText(`Lives: ${baseHealth}`, 250, y);
-
-    ctx.fillStyle = '#ffcc00';
-    ctx.fillText(`Gold: ${money}`, 390, y);
-
-    ctx.fillStyle = '#ff4444';
-    ctx.fillText(`Score: ${score}`, 530, y);
-
-    // Wave type indicator
-    if (gameStarted && currentWaveType) {
-        const typeName = currentWaveType === 'boss' ? 'BOSS' : ENEMY_TYPES[currentWaveType]?.name || currentWaveType;
-        ctx.fillStyle = HUD_WAVE_COLORS[currentWaveType] || '#aaa';
-        ctx.fillText(typeName, 650, y);
+        ctx.fillText(`Next: ${Math.ceil(waveTimer)}s`, 120, y);
     }
 
     if (gamePaused && gameStarted) {
         ctx.fillStyle = '#ffff00';
-        ctx.fillText('PAUSED', 750, y);
+        ctx.textAlign = 'right';
+        ctx.fillText('PAUSED', canvas.width - 12, y);
+        ctx.textAlign = 'left';
     }
 
     ctx.textBaseline = 'alphabetic';
+}
+
+function updateSidebarStats() {
+    statLives.textContent = baseHealth;
+    statGold.textContent = money;
+    statScore.textContent = score;
+    if (gameStarted && currentWaveType) {
+        const typeName = currentWaveType === 'boss' ? 'BOSS' : ENEMY_TYPES[currentWaveType]?.name || currentWaveType;
+        const color = HUD_WAVE_COLORS[currentWaveType] || '#aaa';
+        statWave.textContent = typeName;
+        statWave.style.color = color;
+    } else if (gameStarted) {
+        statWave.textContent = level;
+        statWave.style.color = '#00ccff';
+    } else {
+        statWave.textContent = '--';
+        statWave.style.color = '#00ccff';
+    }
 }
 
 // Draw overlay message
@@ -2943,6 +2949,7 @@ function gameLoop(timestamp) {
         drawBoard();
         for (let tower of towers) tower.draw();
         drawHUD();
+        updateSidebarStats();
         if (level === 100 && enemies.length === 0) {
             drawOverlayMessage('You Win!', `Final Score: ${score}`, '#4CAF50');
         } else {
@@ -3038,6 +3045,7 @@ function gameLoop(timestamp) {
     });
 
     drawHUD();
+    updateSidebarStats();
     drawWaveBar();
 
     if (!gameStarted && towers.length === 0) {
@@ -3392,7 +3400,7 @@ difficultySelect.addEventListener('change', () => {
 
 document.addEventListener('click', (e) => {
     if (!gameOver && e.target !== canvas && e.target !== upgradeButton && e.target !== sellButton &&
-        !e.target.closest('.tower-type-btn')) {
+        !e.target.closest('.tower-type-btn') && !e.target.closest('#sidebar')) {
         selectedTower = null;
         selectedEnemy = null;
         towerPanel.style.display = 'none';

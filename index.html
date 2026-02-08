@@ -24,27 +24,76 @@
             font-weight: 300;
         }
         #gameContainer {
-            position: relative;
-            display: inline-block;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
         }
         canvas {
             border: 3px solid #333;
-            border-radius: 4px;
+            border-radius: 4px 0 0 4px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.6);
             display: block;
             touch-action: none;
         }
+
+        /* Sidebar */
+        #sidebar {
+            position: relative;
+            width: 220px;
+            background: rgba(20, 20, 40, 0.95);
+            border: 3px solid #333;
+            border-left: 1px solid #444;
+            border-radius: 0 4px 4px 0;
+            box-shadow: 4px 4px 24px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            overflow: visible;
+        }
+
+        /* Sidebar stats */
+        #sidebarStats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            padding: 8px;
+            border-bottom: 1px solid #333;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 6px 4px;
+        }
+        .stat-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.6;
+            margin-bottom: 2px;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .stat-lives .stat-value { color: #00ff00; }
+        .stat-gold .stat-value { color: #ffcc00; }
+        .stat-score .stat-value { color: #ff4444; }
+        .stat-wave .stat-value { color: #00ccff; }
+
+        /* Tower panel - floating overlay */
         #towerPanel {
             position: absolute;
-            top: 50px;
-            right: -215px;
-            width: 200px;
-            padding: 12px;
-            background: rgba(20, 20, 40, 0.95);
-            border: 1px solid #444;
-            border-radius: 6px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 10px 12px;
+            background: rgba(20, 20, 40, 0.97);
+            border-top: 2px solid #555;
+            border-radius: 0 0 4px 0;
             display: none;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 10;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.4);
         }
         #towerPanel h3 {
             margin: 0 0 8px 0;
@@ -58,18 +107,20 @@
             line-height: 1.7;
             color: #bbb;
         }
+
         /* Tower type selector */
         #towerSelector {
-            display: flex;
-            justify-content: center;
-            gap: 5px;
-            margin: 8px 0 4px 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            padding: 8px;
+            border-bottom: 1px solid #333;
         }
         .tower-type-btn {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 5px 9px;
+            gap: 5px;
+            padding: 5px 6px;
             background: #2a2a4a;
             border: 2px solid #444;
             border-radius: 4px;
@@ -85,27 +136,32 @@
         .tower-type-btn.cant-afford { opacity: 0.35; }
         .tower-icon {
             display: inline-block;
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             border: 2px solid #222;
             flex-shrink: 0;
         }
-        .tower-label { text-align: left; }
+        .tower-label { text-align: left; font-size: 10px; }
+
         /* Controls */
         #controls {
-            margin-top: 8px;
-            text-align: center;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            padding: 8px;
+            border-top: 1px solid #333;
+            margin-top: auto;
         }
         button, select {
-            margin: 3px;
-            padding: 8px 16px;
+            margin: 0;
+            padding: 7px 8px;
             background: #2a2a4a;
             color: #e0e0e0;
             border: 1px solid #444;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-family: inherit;
             transition: background 0.2s, border-color 0.2s;
         }
@@ -148,48 +204,62 @@
         }
         .ref-link a:hover { color: #888; }
 
+        /* Difficulty select spans full width */
+        #controls select {
+            grid-column: 1 / -1;
+        }
+
         /* Mobile responsive */
-        @media (max-width: 860px) {
+        @media (max-width: 1040px) {
             h1 { font-size: 16px; margin-bottom: 6px; letter-spacing: 1px; }
-            #gameContainer { width: 100%; }
+            #gameContainer {
+                flex-direction: column;
+                width: 100%;
+            }
             canvas {
                 width: 100%;
                 height: auto;
                 border-width: 2px;
+                border-radius: 4px 4px 0 0;
             }
-            #towerPanel {
-                position: absolute;
-                top: auto;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                width: auto;
-                border-radius: 6px 6px 0 0;
-                z-index: 10;
+            #sidebar {
+                width: 100%;
+                border-radius: 0 0 4px 4px;
+                border-left: 3px solid #333;
+                border-top: 1px solid #444;
+                flex-direction: column;
+            }
+            #sidebarStats {
+                grid-template-columns: repeat(4, 1fr);
             }
             #towerSelector {
-                flex-wrap: wrap;
-                gap: 4px;
+                grid-template-columns: repeat(3, 1fr);
+            }
+            #controls {
+                grid-template-columns: repeat(3, 1fr);
+                margin-top: 0;
+            }
+            #controls button, #controls select {
+                min-height: 44px;
+                font-size: 13px;
             }
             .tower-type-btn {
                 min-height: 44px;
                 padding: 6px 10px;
                 font-size: 12px;
             }
-            #controls {
-                display: flex;
-                flex-wrap: wrap;
-                justify-content: center;
-                gap: 4px;
-            }
-            #controls button, #controls select {
-                min-height: 44px;
-                padding: 8px 12px;
-                font-size: 13px;
-            }
         }
         @media (max-width: 480px) {
             h1 { font-size: 13px; }
+            #sidebarStats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            #towerSelector {
+                grid-template-columns: 1fr 1fr;
+            }
+            #controls {
+                grid-template-columns: 1fr 1fr;
+            }
             .tower-type-btn { font-size: 11px; padding: 5px 7px; }
         }
     </style>
@@ -198,50 +268,70 @@
     <h1>DESKTOP TOWER DEFENSE</h1>
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="towerPanel">
-            <h3 id="towerPanelTitle">Tower Info</h3>
-            <p id="towerStats"></p>
-            <button id="upgradeButton">Upgrade</button>
-            <button id="sellButton">Sell</button>
+        <div id="sidebar">
+            <div id="sidebarStats">
+                <div class="stat-item stat-lives">
+                    <span class="stat-label">Lives</span>
+                    <span class="stat-value" id="statLives">20</span>
+                </div>
+                <div class="stat-item stat-gold">
+                    <span class="stat-label">Gold</span>
+                    <span class="stat-value" id="statGold">100</span>
+                </div>
+                <div class="stat-item stat-score">
+                    <span class="stat-label">Score</span>
+                    <span class="stat-value" id="statScore">0</span>
+                </div>
+                <div class="stat-item stat-wave">
+                    <span class="stat-label">Wave</span>
+                    <span class="stat-value" id="statWave">--</span>
+                </div>
+            </div>
+            <div id="towerSelector">
+                <button class="tower-type-btn selected" data-type="pellet">
+                    <span class="tower-icon" style="background: #5a8a3a;"></span>
+                    <span class="tower-label">Pellet<br>$30</span>
+                </button>
+                <button class="tower-type-btn" data-type="squirt">
+                    <span class="tower-icon" style="background: #2a6a9a;"></span>
+                    <span class="tower-label">Squirt<br>$80</span>
+                </button>
+                <button class="tower-type-btn" data-type="dart">
+                    <span class="tower-icon" style="background: #aa5030;"></span>
+                    <span class="tower-label">Dart<br>$100</span>
+                </button>
+                <button class="tower-type-btn" data-type="swarm">
+                    <span class="tower-icon" style="background: #8a5aa0;"></span>
+                    <span class="tower-label">Swarm<br>$120</span>
+                </button>
+                <button class="tower-type-btn" data-type="frost">
+                    <span class="tower-icon" style="background: #50a0b0;"></span>
+                    <span class="tower-label">Frost<br>$60</span>
+                </button>
+                <button class="tower-type-btn" data-type="bash">
+                    <span class="tower-icon" style="background: #a07030;"></span>
+                    <span class="tower-label">Bash<br>$90</span>
+                </button>
+            </div>
+            <div id="towerPanel">
+                <h3 id="towerPanelTitle">Tower Info</h3>
+                <p id="towerStats"></p>
+                <button id="upgradeButton">Upgrade</button>
+                <button id="sellButton">Sell</button>
+            </div>
+            <div id="controls">
+                <button id="startButton">Start Game</button>
+                <button id="resetButton">Reset</button>
+                <button id="nextWaveButton" disabled>Next Wave</button>
+                <button id="pauseButton" disabled>Pause</button>
+                <button id="loadButton">Load Save</button>
+                <select id="difficultySelect">
+                    <option value="easy">Easy (20s)</option>
+                    <option value="normal">Normal (10s)</option>
+                    <option value="hard">Hard (5s)</option>
+                </select>
+            </div>
         </div>
-    </div>
-    <div id="towerSelector">
-        <button class="tower-type-btn selected" data-type="pellet">
-            <span class="tower-icon" style="background: #5a8a3a;"></span>
-            <span class="tower-label">Pellet<br>$30</span>
-        </button>
-        <button class="tower-type-btn" data-type="squirt">
-            <span class="tower-icon" style="background: #2a6a9a;"></span>
-            <span class="tower-label">Squirt<br>$80</span>
-        </button>
-        <button class="tower-type-btn" data-type="dart">
-            <span class="tower-icon" style="background: #aa5030;"></span>
-            <span class="tower-label">Dart<br>$100</span>
-        </button>
-        <button class="tower-type-btn" data-type="swarm">
-            <span class="tower-icon" style="background: #8a5aa0;"></span>
-            <span class="tower-label">Swarm<br>$120</span>
-        </button>
-        <button class="tower-type-btn" data-type="frost">
-            <span class="tower-icon" style="background: #50a0b0;"></span>
-            <span class="tower-label">Frost<br>$60</span>
-        </button>
-        <button class="tower-type-btn" data-type="bash">
-            <span class="tower-icon" style="background: #a07030;"></span>
-            <span class="tower-label">Bash<br>$90</span>
-        </button>
-    </div>
-    <div id="controls">
-        <button id="startButton">Start Game</button>
-        <button id="resetButton">Reset</button>
-        <button id="nextWaveButton" disabled>Next Wave</button>
-        <button id="pauseButton" disabled>Pause</button>
-        <button id="loadButton">Load Save</button>
-        <select id="difficultySelect">
-            <option value="easy">Easy (20s)</option>
-            <option value="normal">Normal (10s)</option>
-            <option value="hard">Hard (5s)</option>
-        </select>
     </div>
     <audio id="enemyDeathSound" preload="auto">
         <source src="enemy-death.mp3" type="audio/mpeg">
