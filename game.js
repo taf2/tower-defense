@@ -494,7 +494,7 @@ let enemyListDirty = false;
 let projectileListDirty = false;
 let frameNow = 0;
 let touchActive = false; // suppress click after touch
-let touchFingerPos = null; // {x, y} in canvas coords during active touch drag
+let touchDragging = false; // true while finger is on canvas during tower placement
 
 // Mobile detection
 const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
@@ -1917,22 +1917,6 @@ function drawHoverPreview() {
             ctx.stroke();
             ctx.setLineDash([]);
         }
-        // Touch indicator: line from preview to finger position
-        if (touchFingerPos) {
-            ctx.beginPath();
-            ctx.moveTo(hx + TOWER_PX / 2, hy + TOWER_PX);
-            ctx.lineTo(touchFingerPos.x, touchFingerPos.y);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 1;
-            ctx.setLineDash([3, 3]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            // Small dot at finger position
-            ctx.beginPath();
-            ctx.arc(touchFingerPos.x, touchFingerPos.y, 4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.fill();
-        }
     } else {
         // Highlight existing tower's 2x2 area on hover
         const ownerTower = towers.find(t =>
@@ -2410,7 +2394,7 @@ class Tower {
     }
 
     sell() {
-        const sellValue = Math.floor(this.totalCost * 0.6);
+        const sellValue = gameStarted ? Math.floor(this.totalCost * 0.6) : this.totalCost;
         money += sellValue;
         // Release all 4 cells
         for (let dy = 0; dy < 2; dy++)
@@ -2825,7 +2809,7 @@ function updateTowerPanel() {
         Range: ${selectedTower.range}<br>
         Fire Rate: ${selectedTower.fireRate} frames<br>
         Total Cost: $${selectedTower.totalCost}<br>
-        Sell Value: $${Math.floor(selectedTower.totalCost * 0.6)}
+        Sell Value: $${gameStarted ? Math.floor(selectedTower.totalCost * 0.6) : selectedTower.totalCost}
     `;
 
     if (selectedTower.type === 'squirt') {
@@ -2981,9 +2965,22 @@ function gameLoop(timestamp) {
 towerTypeButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        selectedTowerType = btn.dataset.type;
-        towerTypeButtons.forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
+        const type = btn.dataset.type;
+        // If tapping the already-selected type, toggle the preview panel
+        if (selectedTowerType === type && hoverPreviewType === type) {
+            hoverPreviewType = null;
+            if (selectedTower) {
+                updateTowerPanel();
+            } else {
+                towerPanel.style.display = 'none';
+            }
+        } else {
+            selectedTowerType = type;
+            towerTypeButtons.forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            hoverPreviewType = type;
+            showTowerPreview(type);
+        }
     });
     btn.addEventListener('mouseenter', () => {
         hoverPreviewType = btn.dataset.type;
@@ -3030,16 +3027,11 @@ canvas.addEventListener('mouseleave', () => {
     hoverCell = null;
 });
 
-// Touch offset: preview appears above finger (in canvas pixels)
-const TOUCH_OFFSET_Y = 3 * GRID_SIZE; // 60px above finger
-
-function handleTouchPreview(touch) {
+// Update hoverCell from touch coordinates (no offset - direct position)
+function updateHoverFromTouch(touch) {
     const { x, y } = canvasCoords(touch.clientX, touch.clientY);
-    touchFingerPos = { x, y };
-    // Offset upward so preview is visible above fingertip
-    const offsetY = y - TOUCH_OFFSET_Y;
     const gridX = Math.floor(x / GRID_SIZE);
-    const gridY = Math.floor(Math.max(0, offsetY) / GRID_SIZE);
+    const gridY = Math.floor(y / GRID_SIZE);
     if (gridX >= BORDER_CELLS && gridX + 1 < COLS - BORDER_CELLS &&
         gridY >= BORDER_CELLS && gridY + 1 < ROWS - BORDER_CELLS) {
         hoverCell = { x: gridX, y: gridY };
@@ -3101,13 +3093,16 @@ function handleCanvasAction(x, y, gridX, gridY) {
 }
 
 // Touch events for mobile tower placement
+// UX: touch down → show preview, drag → preview follows, release on canvas → place,
+//      drag off valid area → cancel (no placement)
 canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     touchActive = true;
     if (gameOver) return;
     const touch = e.touches[0];
     if (selectedTowerType) {
-        handleTouchPreview(touch);
+        touchDragging = true;
+        updateHoverFromTouch(touch);
     }
 }, { passive: false });
 
@@ -3115,8 +3110,8 @@ canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
     if (gameOver) return;
     const touch = e.touches[0];
-    if (selectedTowerType) {
-        handleTouchPreview(touch);
+    if (touchDragging && selectedTowerType) {
+        updateHoverFromTouch(touch);
     }
 }, { passive: false });
 
@@ -3127,20 +3122,23 @@ canvas.addEventListener('touchend', (e) => {
     const touch = e.changedTouches[0];
     const { x, y } = canvasCoords(touch.clientX, touch.clientY);
 
-    if (selectedTowerType && hoverCell) {
-        // Place at the offset hover position, not finger position
-        const gridX = hoverCell.x;
-        const gridY = hoverCell.y;
-        // Use hoverCell canvas coords for action
-        handleCanvasAction(hoverCell.x * GRID_SIZE + GRID_SIZE, hoverCell.y * GRID_SIZE + GRID_SIZE, gridX, gridY);
-    } else {
-        // No tower selected: tap to select tower/enemy at finger position
+    if (touchDragging && selectedTowerType && hoverCell) {
+        // Place tower at the current hover cell
+        handleCanvasAction(x, y, hoverCell.x, hoverCell.y);
+    } else if (!touchDragging || !selectedTowerType) {
+        // No tower type selected: tap to select existing tower or enemy
         const gridX = Math.floor(x / GRID_SIZE);
         const gridY = Math.floor(y / GRID_SIZE);
         handleCanvasAction(x, y, gridX, gridY);
     }
+    // If hoverCell was null (finger dragged off valid area), nothing is placed
     hoverCell = null;
-    touchFingerPos = null;
+    touchDragging = false;
+}, { passive: false });
+
+canvas.addEventListener('touchcancel', (e) => {
+    hoverCell = null;
+    touchDragging = false;
 }, { passive: false });
 
 // Right-click to deselect tower placement mode
