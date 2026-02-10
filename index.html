@@ -26,7 +26,7 @@
         #gameContainer {
             display: flex;
             flex-direction: row;
-            align-items: stretch;
+            align-items: flex-start;
         }
         canvas {
             border: 3px solid #333;
@@ -40,6 +40,7 @@
         #sidebar {
             position: relative;
             width: 220px;
+            height: 600px;
             background: rgba(20, 20, 40, 0.95);
             border: 3px solid #333;
             border-left: 1px solid #444;
@@ -81,31 +82,46 @@
         .stat-score .stat-value { color: #ff4444; }
         .stat-wave .stat-value { color: #00ccff; }
 
-        /* Tower panel - floating overlay */
+        /* Tower panel */
         #towerPanel {
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            padding: 10px 12px;
+            padding: 7px 9px;
             background: rgba(20, 20, 40, 0.97);
             border-top: 2px solid #555;
-            border-radius: 0 0 4px 0;
             display: none;
-            z-index: 10;
-            box-shadow: 0 -4px 12px rgba(0,0,0,0.4);
+        }
+        #towerPanelHeader {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 5px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #333;
         }
         #towerPanel h3 {
-            margin: 0 0 8px 0;
+            margin: 0;
             color: #90caf9;
-            font-size: 15px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 6px;
+            font-size: 13px;
+            flex: 1;
         }
         #towerStats {
-            font-size: 13px;
-            line-height: 1.7;
+            font-size: 12px;
+            line-height: 1.35;
             color: #bbb;
+        }
+        #towerPanel button {
+            padding: 5px 7px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        #towerPanelHeader #sellButton {
+            margin-top: 0;
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1;
         }
 
         /* Tower type selector */
@@ -224,6 +240,7 @@
             }
             #sidebar {
                 width: 100%;
+                height: auto;
                 border-radius: 0 0 4px 4px;
                 border-left: 3px solid #333;
                 border-top: 1px solid #444;
@@ -314,10 +331,12 @@
                 </button>
             </div>
             <div id="towerPanel">
-                <h3 id="towerPanelTitle">Tower Info</h3>
+                <div id="towerPanelHeader">
+                    <h3 id="towerPanelTitle">Tower Info</h3>
+                    <button id="sellButton" title="Sell" aria-label="Sell">$</button>
+                </div>
                 <p id="towerStats"></p>
                 <button id="upgradeButton">Upgrade</button>
-                <button id="sellButton">Sell</button>
             </div>
             <div id="controls">
                 <button id="startButton">Start Game</button>

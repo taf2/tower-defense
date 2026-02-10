@@ -3065,17 +3065,17 @@ towerTypeButtons.forEach(btn => {
         e.stopPropagation();
         const type = btn.dataset.type;
         // If tapping the already-selected type, toggle the preview panel
-        if (selectedTowerType === type && hoverPreviewType === type) {
+        if (selectedTowerType === type && hoverPreviewType === type && !selectedTower) {
             hoverPreviewType = null;
-            if (selectedTower) {
-                updateTowerPanel();
-            } else {
-                towerPanel.style.display = 'none';
-            }
+            towerPanel.style.display = 'none';
         } else {
             selectedTowerType = type;
             towerTypeButtons.forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
+            // Entering placement mode should switch panel to the chosen tower type.
+            selectedTower = null;
+            selectedEnemy = null;
+            resetSellConfirm();
             hoverPreviewType = type;
             showTowerPreview(type);
         }
@@ -3189,8 +3189,20 @@ function handleCanvasAction(x, y, gridX, gridY) {
         for (let tower of towers) {
             if (gridX >= tower.gridX && gridX < tower.gridX + 2 &&
                 gridY >= tower.gridY && gridY < tower.gridY + 2) {
-                selectedTower = tower;
-                updateTowerPanel();
+                // Clicking the same tower again dismisses its details panel.
+                if (selectedTower === tower) {
+                    selectedTower = null;
+                    resetSellConfirm();
+                    if (hoverPreviewType) {
+                        showTowerPreview(hoverPreviewType);
+                    } else {
+                        towerPanel.style.display = 'none';
+                    }
+                } else {
+                    selectedTower = tower;
+                    hoverPreviewType = null;
+                    updateTowerPanel();
+                }
                 return true;
             }
         }
@@ -3335,7 +3347,9 @@ let sellConfirmTimer = null;
 
 function resetSellConfirm() {
     sellConfirmPending = false;
-    sellButton.textContent = 'Sell';
+    sellButton.textContent = '$';
+    sellButton.title = 'Sell';
+    sellButton.setAttribute('aria-label', 'Sell');
     sellButton.style.background = '';
     sellButton.style.borderColor = '';
     if (sellConfirmTimer) { clearTimeout(sellConfirmTimer); sellConfirmTimer = null; }
@@ -3349,7 +3363,8 @@ sellButton.addEventListener('click', (e) => {
         resetSellConfirm();
     } else {
         sellConfirmPending = true;
-        sellButton.textContent = 'Confirm?';
+        sellButton.title = 'Confirm sell';
+        sellButton.setAttribute('aria-label', 'Confirm sell');
         sellButton.style.background = '#882222';
         sellButton.style.borderColor = '#e55';
         // Auto-reset after 2 seconds
