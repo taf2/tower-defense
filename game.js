@@ -13,7 +13,9 @@ const resetButton = document.getElementById('resetButton');
 const nextWaveButton = document.getElementById('nextWaveButton');
 const pauseButton = document.getElementById('pauseButton');
 const loadButton = document.getElementById('loadButton');
+const fullscreenButton = document.getElementById('fullscreenButton');
 const difficultySelect = document.getElementById('difficultySelect');
+const difficultyModal = document.getElementById('difficultyModal');
 const enemyDeathSound = document.getElementById('enemyDeathSound');
 const towerSounds = {
     pellet: document.getElementById('sound-pellet'),
@@ -272,20 +274,20 @@ const COLS = Math.floor(canvas.width / GRID_SIZE);   // 40 (was 20)
 const ROWS = Math.floor(canvas.height / GRID_SIZE);  // 30 (was 15)
 const MAX_TOWER_LEVEL = 6;
 
-// Tower type definitions
+// Tower type definitions (matched to original Desktop Tower Defense base stats)
 const TOWER_TYPES = {
     pellet: {
         name: 'Pellet',
         evolutionName: 'Sniper',
-        description: 'Fast, cheap basic tower',
-        cost: 30,
+        description: 'Cheap tower that fires pellets.',
+        cost: 5,
         levels: [
-            { damage: 5,   range: 80,  fireRate: 30, upgradeCost: 0   },
-            { damage: 10,  range: 90,  fireRate: 25, upgradeCost: 25  },
-            { damage: 18,  range: 100, fireRate: 20, upgradeCost: 40  },
-            { damage: 30,  range: 110, fireRate: 18, upgradeCost: 65  },
-            { damage: 50,  range: 120, fireRate: 15, upgradeCost: 100 },
-            { damage: 120, range: 200, fireRate: 50, upgradeCost: 200 },
+            { damage: 10, range: 90, fireRate: 60, upgradeCost: 0   },
+            { damage: 16, range: 105, fireRate: 55, upgradeCost: 5   },
+            { damage: 24, range: 120, fireRate: 50, upgradeCost: 5   },
+            { damage: 35, range: 135, fireRate: 45, upgradeCost: 10  },
+            { damage: 50, range: 150, fireRate: 40, upgradeCost: 20  },
+            { damage: 80, range: 195, fireRate: 35, upgradeCost: 40  },
         ],
         colors: {
             ring: ['#5a8a3a', '#8ab030', '#b0d040', '#c8e050', '#d8f060', '#ffe880'],
@@ -301,15 +303,15 @@ const TOWER_TYPES = {
     squirt: {
         name: 'Squirt',
         evolutionName: 'Typhoon',
-        description: 'Splash damage in an area',
-        cost: 80,
+        description: 'Quick firing tower that upgrades well.',
+        cost: 15,
         levels: [
-            { damage: 8,  range: 90,  fireRate: 50, upgradeCost: 0   },
-            { damage: 15, range: 100, fireRate: 45, upgradeCost: 60  },
-            { damage: 25, range: 115, fireRate: 40, upgradeCost: 90  },
-            { damage: 38, range: 120, fireRate: 35, upgradeCost: 130 },
-            { damage: 55, range: 130, fireRate: 30, upgradeCost: 180 },
-            { damage: 90, range: 150, fireRate: 25, splashRadius: 60, upgradeCost: 350 },
+            { damage: 5,  range: 105, fireRate: 20, upgradeCost: 0   },
+            { damage: 8,  range: 120, fireRate: 18, upgradeCost: 15  },
+            { damage: 12, range: 135, fireRate: 16, upgradeCost: 12  },
+            { damage: 18, range: 150, fireRate: 14, upgradeCost: 23  },
+            { damage: 26, range: 165, fireRate: 12, upgradeCost: 35  },
+            { damage: 40, range: 195, fireRate: 10, upgradeCost: 75  },
         ],
         colors: {
             ring: ['#2a6a9a', '#3080b0', '#40a0d0', '#50b8e0', '#60d0f0', '#90e8ff'],
@@ -317,23 +319,23 @@ const TOWER_TYPES = {
         },
         barrelColor: '#2a6a9a',
         projectileColor: '#40a0d0',
-        projectileSpeed: 4,
+        projectileSpeed: 6,
         barrelStyle: 'wide',
-        splashRadius: 40,
+        splashRadius: 0,
         multiTarget: false,
     },
     dart: {
         name: 'Dart',
         evolutionName: 'ICBM',
-        description: 'Slow, powerful, long range',
-        cost: 100,
+        description: 'Slow firing tower that damages an area on the ground.',
+        cost: 20,
         levels: [
-            { damage: 25,  range: 140, fireRate: 90,  upgradeCost: 0   },
-            { damage: 45,  range: 170, fireRate: 80,  upgradeCost: 80  },
-            { damage: 75,  range: 200, fireRate: 70,  upgradeCost: 120 },
-            { damage: 110, range: 220, fireRate: 65,  upgradeCost: 175 },
-            { damage: 160, range: 240, fireRate: 60,  upgradeCost: 250 },
-            { damage: 350, range: 300, fireRate: 100, upgradeCost: 500 },
+            { damage: 8,  range: 135,  fireRate: 90, splashRadius: 30, upgradeCost: 0   },
+            { damage: 14, range: 150, fireRate: 85, splashRadius: 35, upgradeCost: 20  },
+            { damage: 22, range: 165, fireRate: 80, splashRadius: 40, upgradeCost: 15  },
+            { damage: 32, range: 180, fireRate: 75, splashRadius: 45, upgradeCost: 35  },
+            { damage: 45, range: 200, fireRate: 70, splashRadius: 50, upgradeCost: 60  },
+            { damage: 70, range: 240, fireRate: 65, splashRadius: 60, upgradeCost: 110 },
         ],
         colors: {
             ring: ['#aa5030', '#cc6030', '#ee7040', '#ff8850', '#ffa060', '#ffd080'],
@@ -341,23 +343,23 @@ const TOWER_TYPES = {
         },
         barrelColor: '#aa5030',
         projectileColor: '#ff6600',
-        projectileSpeed: 7,
+        projectileSpeed: 8,
         barrelStyle: 'long',
-        splashRadius: 0,
+        splashRadius: 30,
         multiTarget: false,
     },
     swarm: {
         name: 'Swarm',
         evolutionName: 'Storm',
-        description: 'Anti-air, fires missiles at flyers',
-        cost: 120,
+        description: 'Anti-air tower that fires 4 missiles at a time.',
+        cost: 50,
         levels: [
-            { damage: 12, range: 100, fireRate: 20, targets: 2, upgradeCost: 0   },
-            { damage: 18, range: 115, fireRate: 18, targets: 3, upgradeCost: 90  },
-            { damage: 28, range: 130, fireRate: 15, targets: 4, upgradeCost: 130 },
-            { damage: 40, range: 140, fireRate: 12, targets: 5, upgradeCost: 190 },
-            { damage: 55, range: 155, fireRate: 10, targets: 7, upgradeCost: 270 },
-            { damage: 80, range: 170, fireRate: 8,  targets: 10, upgradeCost: 450 },
+            { damage: 20, range: 90, fireRate: 40, targets: 4, upgradeCost: 0   },
+            { damage: 28, range: 105, fireRate: 36, targets: 4, upgradeCost: 50  },
+            { damage: 38, range: 120, fireRate: 32, targets: 5, upgradeCost: 30  },
+            { damage: 50, range: 135, fireRate: 28, targets: 5, upgradeCost: 50  },
+            { damage: 65, range: 150, fireRate: 24, targets: 6, upgradeCost: 75  },
+            { damage: 90, range: 180, fireRate: 20, targets: 7, upgradeCost: 125 },
         ],
         colors: {
             ring: ['#8a5aa0', '#a070b8', '#b888d0', '#c898e0', '#d8a8f0', '#f0d0ff'],
@@ -373,15 +375,15 @@ const TOWER_TYPES = {
     frost: {
         name: 'Frost',
         evolutionName: 'Blizzard',
-        description: 'Slows enemies, low damage',
-        cost: 60,
+        description: 'This tower freezes creeps to slow them down.',
+        cost: 50,
         levels: [
-            { damage: 3,  range: 90,  fireRate: 45, slowFactor: 0.4,  slowDuration: 90,  upgradeCost: 0   },
-            { damage: 5,  range: 105, fireRate: 40, slowFactor: 0.5,  slowDuration: 120, upgradeCost: 50  },
-            { damage: 8,  range: 120, fireRate: 35, slowFactor: 0.6,  slowDuration: 150, upgradeCost: 75  },
-            { damage: 12, range: 130, fireRate: 30, slowFactor: 0.65, slowDuration: 170, upgradeCost: 110 },
-            { damage: 18, range: 140, fireRate: 25, slowFactor: 0.70, slowDuration: 200, upgradeCost: 160 },
-            { damage: 30, range: 160, fireRate: 20, slowFactor: 0.80, slowDuration: 250, upgradeCost: 300 },
+            { damage: 10, range: 75, fireRate: 60, slowFactor: 0.40, slowDuration: 90,  upgradeCost: 0   },
+            { damage: 15, range: 90, fireRate: 55, slowFactor: 0.50, slowDuration: 120, upgradeCost: 25  },
+            { damage: 22, range: 105, fireRate: 50, slowFactor: 0.60, slowDuration: 150, upgradeCost: 25  },
+            { damage: 30, range: 120, fireRate: 45, slowFactor: 0.65, slowDuration: 170, upgradeCost: 25  },
+            { damage: 40, range: 135, fireRate: 40, slowFactor: 0.70, slowDuration: 200, upgradeCost: 25  },
+            { damage: 55, range: 165, fireRate: 35, slowFactor: 0.80, slowDuration: 250, upgradeCost: 50  },
         ],
         colors: {
             ring: ['#50a0b0', '#60c0d8', '#80e0f0', '#90e8f8', '#a0f0ff', '#d0ffff'],
@@ -389,23 +391,24 @@ const TOWER_TYPES = {
         },
         barrelColor: '#50a0b0',
         projectileColor: '#80e0f0',
-        projectileSpeed: 4,
+        projectileSpeed: 5,
         barrelStyle: 'cone',
         splashRadius: 0,
         multiTarget: false,
+        slowAura: true,
     },
     bash: {
         name: 'Bash',
         evolutionName: 'Quake',
-        description: 'Melee AoE, chance to stun',
-        cost: 90,
+        description: 'Damages the ground around it, plus a chance to stun.',
+        cost: 30,
         levels: [
-            { damage: 12,  range: 50, fireRate: 40, stunChance: 0.15, stunDuration: 30,  upgradeCost: 0   },
-            { damage: 22,  range: 55, fireRate: 35, stunChance: 0.20, stunDuration: 45,  upgradeCost: 70  },
-            { damage: 35,  range: 60, fireRate: 30, stunChance: 0.25, stunDuration: 60,  upgradeCost: 100 },
-            { damage: 50,  range: 65, fireRate: 28, stunChance: 0.30, stunDuration: 70,  upgradeCost: 150 },
-            { damage: 70,  range: 70, fireRate: 25, stunChance: 0.35, stunDuration: 80,  upgradeCost: 220 },
-            { damage: 120, range: 80, fireRate: 20, stunChance: 0.50, stunDuration: 120, upgradeCost: 400 },
+            { damage: 10, range: 60, fireRate: 60, stunChance: 0.15, stunDuration: 30,  upgradeCost: 0   },
+            { damage: 16, range: 65, fireRate: 55, stunChance: 0.20, stunDuration: 45,  upgradeCost: 100 },
+            { damage: 24, range: 75, fireRate: 50, stunChance: 0.25, stunDuration: 60,  upgradeCost: 120 },
+            { damage: 34, range: 80, fireRate: 48, stunChance: 0.30, stunDuration: 70,  upgradeCost: 145 },
+            { damage: 46, range: 90, fireRate: 45, stunChance: 0.35, stunDuration: 80,  upgradeCost: 175 },
+            { damage: 70, range: 105, fireRate: 40, stunChance: 0.50, stunDuration: 120, upgradeCost: 260 },
         ],
         colors: {
             ring: ['#a07030', '#c08838', '#e0a040', '#e8b050', '#f0c060', '#ffe080'],
@@ -421,22 +424,24 @@ const TOWER_TYPES = {
     },
 };
 
-// Enemy type definitions
+// Enemy type definitions (economy tuned to match cheap original tower prices)
 const ENEMY_TYPES = {
-    normal:  { name: 'Normal',  hpMult: 1.0, speedMult: 1.0, gold: 5,  score: 10, color: { main: '#3a3a4a', dark: '#1a1a2a', accent: '#5a5a70' } },
-    group:   { name: 'Group',   hpMult: 0.4, speedMult: 1.0, gold: 2,  score: 5,  color: { main: '#6a5040', dark: '#3a2820', accent: '#8a7060' }, sizeMult: 0.7 },
-    fast:    { name: 'Fast',    hpMult: 0.6, speedMult: 2.0, gold: 8,  score: 12, color: { main: '#aa4420', dark: '#662200', accent: '#cc6640' } },
-    immune:  { name: 'Immune',  hpMult: 1.3, speedMult: 0.9, gold: 10, score: 15, color: { main: '#2a6a2a', dark: '#104010', accent: '#4a8a4a' }, slowImmune: true },
-    spawn:   { name: 'Spawn',   hpMult: 0.8, speedMult: 0.9, gold: 5,  score: 8,  color: { main: '#aa8a20', dark: '#665510', accent: '#ccaa40' }, spawnsOnDeath: 2 },
-    flying:  { name: 'Flying',  hpMult: 0.7, speedMult: 1.2, gold: 12, score: 15, color: { main: '#4080b0', dark: '#205070', accent: '#60a0d0' }, flying: true },
-    dark:    { name: 'Dark',    hpMult: 1.5, speedMult: 0.7, gold: 15, score: 20, color: { main: '#1a1a1a', dark: '#080808', accent: '#333' }, armor: true },
+    normal:  { name: 'Normal',  hpMult: 1.0, speedMult: 1.0, gold: 1,  score: 10, color: { main: '#3a3a4a', dark: '#1a1a2a', accent: '#5a5a70' } },
+    group:   { name: 'Group',   hpMult: 0.5, speedMult: 1.0, gold: 1,  score: 5,  color: { main: '#6a5040', dark: '#3a2820', accent: '#8a7060' }, sizeMult: 0.7 },
+    fast:    { name: 'Fast',    hpMult: 0.7, speedMult: 2.0, gold: 1,  score: 12, color: { main: '#aa4420', dark: '#662200', accent: '#cc6640' } },
+    immune:  { name: 'Immune',  hpMult: 1.4, speedMult: 0.9, gold: 2,  score: 15, color: { main: '#2a6a2a', dark: '#104010', accent: '#4a8a4a' }, slowImmune: true },
+    spawn:   { name: 'Spawn',   hpMult: 0.9, speedMult: 0.9, gold: 1,  score: 8,  color: { main: '#aa8a20', dark: '#665510', accent: '#ccaa40' }, spawnsOnDeath: 2 },
+    flying:  { name: 'Flying',  hpMult: 0.8, speedMult: 1.2, gold: 2,  score: 15, color: { main: '#4080b0', dark: '#205070', accent: '#60a0d0' }, flying: true },
+    dark:    { name: 'Dark',    hpMult: 1.6, speedMult: 0.7, gold: 3,  score: 20, color: { main: '#1a1a1a', dark: '#080808', accent: '#333' }, armor: true },
 };
 
 // Difficulty settings
 const DIFFICULTY_LEVELS = {
-    easy: 20,
-    normal: 10,
-    hard: 5
+    easy: { delay: 20, lives: 20, gold: 80, hpMult: 1.0, label: 'Easy Mode' },
+    medium: { delay: 15, lives: 20, gold: 80, hpMult: 1.0, label: 'Normal Mode' },
+    hard: { delay: 10, lives: 20, gold: 80, hpMult: 1.5, label: 'Hard Mode' },
+    challenge: { delay: 8, lives: 15, gold: 60, hpMult: 1.8, label: 'Challenge Mode' },
+    fun: { delay: 12, lives: 30, gold: 120, hpMult: 0.8, label: 'Fun Mode' }
 };
 
 const MAX_WAVES = 100;
@@ -475,9 +480,10 @@ function getWaveMeta(wave) {
 let enemies = [];
 let towers = [];
 let projectiles = [];
-let money = 1000;
+let difficulty = 'easy';
+let money = DIFFICULTY_LEVELS[difficulty].gold;
 let score = 0;
-let baseHealth = 20;
+let baseHealth = DIFFICULTY_LEVELS[difficulty].lives;
 let gameOver = false;
 let level = 1;
 let selectedTower = null;
@@ -485,9 +491,12 @@ let selectedTowerType = 'pellet';
 let gameStarted = false;
 let gamePaused = false;
 let waveTimer = 0;
-let difficulty = 'easy';
-let WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
+let WAVE_DELAY = DIFFICULTY_LEVELS[difficulty].delay;
 let waveJustCleared = false;
+let pendingSpawns = 0;
+let spawnQueue = [];   // loop-driven enemy spawns: { delay, type, isBoss, hpMult }
+let lastWaveSpawnTs = 0;
+const EARLY_SEND_MIN_MS = 1000; // min time since wave spawn before an early-send bonus is paid
 let hoverCell = null;
 let currentWaveType = 'normal';
 let selectedEnemy = null;
@@ -497,6 +506,9 @@ let pendingEnemyDeaths = [];
 let enemyListDirty = false;
 let projectileListDirty = false;
 let frameNow = 0;
+let lastFrameTs = 0;
+let frameDelta = 1;               // elapsed time in 60fps-frame units
+const MAX_FRAME_DELTA = 3;        // clamp so a stalled tab can't teleport entities
 let touchActive = false; // suppress click after touch
 let touchDragging = false; // true while finger is on canvas during tower placement
 let adjustableTower = null; // tower that can still be moved after placement (mobile)
@@ -759,9 +771,10 @@ function loadGameState() {
             baseHealth = state.baseHealth;
             level = state.level;
             gameStarted = state.gameStarted;
-            difficulty = state.difficulty;
-            WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
-            difficultySelect.value = difficulty;
+            // Backward compat: old saves used 'normal'; map it to 'medium'
+            difficulty = DIFFICULTY_LEVELS[state.difficulty] ? state.difficulty : 'medium';
+            WAVE_DELAY = DIFFICULTY_LEVELS[difficulty].delay;
+            if (difficultySelect) difficultySelect.value = difficulty;
             towers = state.towers.map(t => {
                 const type = t.type || 'dart'; // backward compat for old saves
                 const tower = new Tower(t.gridX * GRID_SIZE, t.gridY * GRID_SIZE, type);
@@ -775,6 +788,7 @@ function loadGameState() {
                 return tower;
             });
             grid = state.grid.map(row => [...row]);
+            clearScheduledSpawns();
             enemies = [];
             projectiles = [];
             pendingEnemyDeaths = [];
@@ -785,7 +799,8 @@ function loadGameState() {
             gameOver = false;
             gamePaused = true;
             waveTimer = WAVE_DELAY;
-            waveJustCleared = false;
+            // Mark as cleared so the wave-clear interest isn't paid on load.
+            waveJustCleared = true;
             startButton.disabled = true;
             nextWaveButton.disabled = false;
             pauseButton.disabled = false;
@@ -845,6 +860,19 @@ function aStar(start, goal, useCache = true) {
         pathCache.set(cacheKey, []);
     }
     return [];
+}
+
+// Recompute an enemy's path from the cell it currently occupies. A* returns the
+// starting cell as its first node, so we skip it — otherwise the enemy walks
+// back to the center of the cell it is already inside (the visible backwards
+// "jerk" when a tower is placed on its path). When the current cell IS the goal
+// (path length 1) we keep index 0 so it still walks to the goal center.
+function repathEnemyFromCurrentCell(enemy) {
+    const cx = Math.floor(enemy.x / GRID_SIZE);
+    const cy = Math.floor(enemy.y / GRID_SIZE);
+    const path = aStar({ x: cx, y: cy }, enemy.goal);
+    enemy.path = path;
+    enemy.pathIndex = path.length > 1 ? 1 : 0;
 }
 
 // Check if placement blocks all paths (2x2 tower footprint)
@@ -976,46 +1004,61 @@ const enemyCoreSpriteCache = new Map();
 
 function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark) {
     const lvl = Math.min(level, 5);
+    // Hand-drawn helper: slightly wobbly line
+    function wobbleLine(x1, y1, x2, y2, w, col) {
+        drawCtx.strokeStyle = col;
+        drawCtx.lineWidth = w;
+        drawCtx.lineCap = 'round';
+        drawCtx.beginPath();
+        drawCtx.moveTo(x1, y1);
+        const steps = Math.max(2, Math.floor(Math.hypot(x2 - x1, y2 - y1) / 4));
+        for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const wx = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 0.8;
+            const wy = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 0.8;
+            drawCtx.lineTo(wx, wy);
+        }
+        drawCtx.stroke();
+    }
+
     switch (type) {
         case 'pellet': {
-            const len = gs * 0.52;
-            const w = 1.5 + lvl * 0.3;
+            const len = gs * 0.50;
+            const w = 2 + lvl * 0.35;
             const cosA = Math.cos(angle);
             const sinA = Math.sin(angle);
-            drawCtx.strokeStyle = '#222';
-            drawCtx.lineWidth = w + 2;
+            // Barrel outline
+            wobbleLine(cx, cy, cx + cosA * len, cy + sinA * len, w + 1.5, '#1a1a1a');
+            wobbleLine(cx, cy, cx + cosA * len, cy + sinA * len, w, color);
+            // Muzzle dot
+            drawCtx.fillStyle = '#1a1a1a';
             drawCtx.beginPath();
-            drawCtx.moveTo(cx, cy);
-            drawCtx.lineTo(cx + cosA * len, cy + sinA * len);
-            drawCtx.stroke();
-
-            drawCtx.strokeStyle = color;
-            drawCtx.lineWidth = w;
-            drawCtx.beginPath();
-            drawCtx.moveTo(cx + cosA * 3, cy + sinA * 3);
-            drawCtx.lineTo(cx + cosA * (len - 1), cy + sinA * (len - 1));
-            drawCtx.stroke();
-
-            drawCtx.fillStyle = '#222';
-            drawCtx.beginPath();
-            drawCtx.arc(cx + cosA * len, cy + sinA * len, w * 0.8 + 1, 0, Math.PI * 2);
+            drawCtx.arc(cx + cosA * len, cy + sinA * len, w * 0.7, 0, Math.PI * 2);
             drawCtx.fill();
 
-            const baseR = 5 + Math.min(lvl, 4);
-            drawCtx.fillStyle = '#333';
+            const baseR = 6 + Math.min(lvl, 4);
+            // Base shadow
+            drawCtx.fillStyle = '#1a1a1a';
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, baseR + 1, 0, Math.PI * 2);
+            drawCtx.arc(cx + 1, cy + 1, baseR, 0, Math.PI * 2);
             drawCtx.fill();
+            // Base body
             drawCtx.fillStyle = dark;
             drawCtx.beginPath();
             drawCtx.arc(cx, cy, baseR, 0, Math.PI * 2);
             drawCtx.fill();
-            drawCtx.strokeStyle = color;
+            // Base outline
+            drawCtx.strokeStyle = '#1a1a1a';
             drawCtx.lineWidth = 1.5;
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, baseR - 1.5, 0, Math.PI * 2);
+            drawCtx.arc(cx, cy, baseR, 0, Math.PI * 2);
             drawCtx.stroke();
-            drawCtx.fillStyle = '#555';
+            drawCtx.strokeStyle = color;
+            drawCtx.lineWidth = 1;
+            drawCtx.beginPath();
+            drawCtx.arc(cx, cy, baseR - 2, 0, Math.PI * 2);
+            drawCtx.stroke();
+            drawCtx.fillStyle = '#e0e0e0';
             drawCtx.beginPath();
             drawCtx.arc(cx, cy, 2.5, 0, Math.PI * 2);
             drawCtx.fill();
@@ -1025,10 +1068,11 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
             const arcCount = 2 + Math.floor(lvl / 2);
             for (let i = 0; i < arcCount; i++) {
                 const dist = 7 + i * 4;
-                const span = 0.6 + i * 0.12;
-                const thick = 2.5 - i * 0.3;
-                drawCtx.strokeStyle = '#1a4a7a';
-                drawCtx.lineWidth = thick + 1.5;
+                const span = 0.55 + i * 0.12;
+                const thick = 3 - i * 0.3;
+                drawCtx.strokeStyle = '#1a1a1a';
+                drawCtx.lineWidth = thick + 2;
+                drawCtx.lineCap = 'round';
                 drawCtx.beginPath();
                 drawCtx.arc(cx, cy, dist, angle - span, angle + span);
                 drawCtx.stroke();
@@ -1038,15 +1082,20 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
                 drawCtx.arc(cx, cy, dist, angle - span, angle + span);
                 drawCtx.stroke();
             }
-            drawCtx.fillStyle = '#222';
+            drawCtx.fillStyle = '#1a1a1a';
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+            drawCtx.arc(cx + 1, cy + 1, 6, 0, Math.PI * 2);
             drawCtx.fill();
             drawCtx.fillStyle = dark;
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+            drawCtx.arc(cx, cy, 6, 0, Math.PI * 2);
             drawCtx.fill();
-            drawCtx.fillStyle = '#555';
+            drawCtx.strokeStyle = '#1a1a1a';
+            drawCtx.lineWidth = 1.5;
+            drawCtx.beginPath();
+            drawCtx.arc(cx, cy, 6, 0, Math.PI * 2);
+            drawCtx.stroke();
+            drawCtx.fillStyle = '#e0e0e0';
             drawCtx.beginPath();
             drawCtx.arc(cx, cy, 2, 0, Math.PI * 2);
             drawCtx.fill();
@@ -1054,31 +1103,41 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
         }
         case 'dart': {
             const r = 10 + Math.min(lvl, 3);
-            const ext = r + 4;
+            const ext = r + 5;
             drawCtx.save();
             drawCtx.translate(cx, cy);
             drawCtx.rotate(angle);
-            drawCtx.strokeStyle = '#333';
-            drawCtx.lineWidth = 2.5;
+            // Thick outer ring
+            drawCtx.strokeStyle = '#1a1a1a';
+            drawCtx.lineWidth = 3;
             drawCtx.beginPath();
             drawCtx.arc(0, 0, r, 0, Math.PI * 2);
             drawCtx.stroke();
-            drawCtx.strokeStyle = color;
-            drawCtx.lineWidth = 1.5;
+            drawCtx.fillStyle = dark;
             drawCtx.beginPath();
-            drawCtx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
-            drawCtx.stroke();
-            drawCtx.strokeStyle = '#333';
+            drawCtx.arc(0, 0, r, 0, Math.PI * 2);
+            drawCtx.fill();
+            drawCtx.strokeStyle = color;
             drawCtx.lineWidth = 2;
+            drawCtx.beginPath();
+            drawCtx.arc(0, 0, r * 0.55, 0, Math.PI * 2);
+            drawCtx.stroke();
+            // Cross hairs
+            drawCtx.strokeStyle = '#1a1a1a';
+            drawCtx.lineWidth = 2.5;
+            drawCtx.lineCap = 'round';
             drawCtx.beginPath();
             drawCtx.moveTo(-ext, 0); drawCtx.lineTo(-r * 0.3, 0);
             drawCtx.moveTo(r * 0.3, 0); drawCtx.lineTo(ext, 0);
             drawCtx.moveTo(0, -ext); drawCtx.lineTo(0, -r * 0.3);
             drawCtx.moveTo(0, r * 0.3); drawCtx.lineTo(0, ext);
             drawCtx.stroke();
-            drawCtx.fillStyle = color;
+            drawCtx.strokeStyle = color;
+            drawCtx.lineWidth = 1.5;
+            drawCtx.stroke();
+            drawCtx.fillStyle = '#e0e0e0';
             drawCtx.beginPath();
-            drawCtx.arc(0, 0, 2.5, 0, Math.PI * 2);
+            drawCtx.arc(0, 0, 3, 0, Math.PI * 2);
             drawCtx.fill();
             drawCtx.restore();
             break;
@@ -1089,8 +1148,9 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
             for (let i = 0; i < armCount; i++) {
                 const a = angle + (i / armCount) * Math.PI * 2;
                 const ac = Math.cos(a), as = Math.sin(a);
-                drawCtx.strokeStyle = '#222';
-                drawCtx.lineWidth = 2.5;
+                drawCtx.strokeStyle = '#1a1a1a';
+                drawCtx.lineWidth = 3;
+                drawCtx.lineCap = 'round';
                 drawCtx.beginPath();
                 drawCtx.moveTo(cx + ac * 4, cy + as * 4);
                 drawCtx.lineTo(cx + ac * armLen, cy + as * armLen);
@@ -1101,19 +1161,28 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
                 drawCtx.moveTo(cx + ac * 5, cy + as * 5);
                 drawCtx.lineTo(cx + ac * (armLen - 1), cy + as * (armLen - 1));
                 drawCtx.stroke();
+                drawCtx.fillStyle = '#1a1a1a';
+                drawCtx.beginPath();
+                drawCtx.arc(cx + ac * armLen, cy + as * armLen, 2.5, 0, Math.PI * 2);
+                drawCtx.fill();
                 drawCtx.fillStyle = color;
                 drawCtx.beginPath();
-                drawCtx.arc(cx + ac * armLen, cy + as * armLen, 2, 0, Math.PI * 2);
+                drawCtx.arc(cx + ac * armLen, cy + as * armLen, 1.5, 0, Math.PI * 2);
                 drawCtx.fill();
             }
-            drawCtx.fillStyle = '#222';
+            drawCtx.fillStyle = '#1a1a1a';
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+            drawCtx.arc(cx + 1, cy + 1, 6, 0, Math.PI * 2);
             drawCtx.fill();
             drawCtx.fillStyle = dark;
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+            drawCtx.arc(cx, cy, 6, 0, Math.PI * 2);
             drawCtx.fill();
+            drawCtx.strokeStyle = '#1a1a1a';
+            drawCtx.lineWidth = 1.5;
+            drawCtx.beginPath();
+            drawCtx.arc(cx, cy, 6, 0, Math.PI * 2);
+            drawCtx.stroke();
             break;
         }
         case 'frost': {
@@ -1123,8 +1192,10 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
             for (let i = 0; i < 6; i++) {
                 const a = angle + (i / 6) * Math.PI * 2;
                 const ac = Math.cos(a), as = Math.sin(a);
-                drawCtx.strokeStyle = '#183848';
-                drawCtx.lineWidth = 3;
+                // Main branch outline
+                drawCtx.strokeStyle = '#1a1a1a';
+                drawCtx.lineWidth = 3.5;
+                drawCtx.lineCap = 'round';
                 drawCtx.beginPath();
                 drawCtx.moveTo(cx, cy);
                 drawCtx.lineTo(cx + ac * armLen, cy + as * armLen);
@@ -1137,6 +1208,17 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
                 drawCtx.stroke();
                 const bx = cx + ac * branchDist;
                 const by = cy + as * branchDist;
+                drawCtx.strokeStyle = '#1a1a1a';
+                drawCtx.lineWidth = 2;
+                for (const sign of [-1, 1]) {
+                    drawCtx.beginPath();
+                    drawCtx.moveTo(bx, by);
+                    drawCtx.lineTo(
+                        bx + Math.cos(a + sign * 1.0) * branchLen,
+                        by + Math.sin(a + sign * 1.0) * branchLen
+                    );
+                    drawCtx.stroke();
+                }
                 drawCtx.strokeStyle = color;
                 drawCtx.lineWidth = 1.5;
                 for (const sign of [-1, 1]) {
@@ -1148,60 +1230,70 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
                     );
                     drawCtx.stroke();
                 }
+                drawCtx.fillStyle = '#1a1a1a';
+                drawCtx.beginPath();
+                drawCtx.arc(cx + ac * armLen, cy + as * armLen, 2, 0, Math.PI * 2);
+                drawCtx.fill();
                 drawCtx.fillStyle = color;
                 drawCtx.beginPath();
-                drawCtx.arc(cx + ac * armLen, cy + as * armLen, 1.5, 0, Math.PI * 2);
+                drawCtx.arc(cx + ac * armLen, cy + as * armLen, 1.2, 0, Math.PI * 2);
                 drawCtx.fill();
             }
-            drawCtx.fillStyle = '#183848';
+            drawCtx.fillStyle = '#1a1a1a';
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+            drawCtx.arc(cx + 1, cy + 1, 5, 0, Math.PI * 2);
             drawCtx.fill();
             drawCtx.fillStyle = dark;
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+            drawCtx.arc(cx, cy, 5, 0, Math.PI * 2);
             drawCtx.fill();
             break;
         }
         case 'bash': {
             const weightR = 10 + Math.min(lvl, 4);
+            // Spikes
             for (let i = -2; i <= 2; i++) {
                 const a = angle + i * 0.3;
-                const startD = weightR + 2;
-                const endD = startD + 5 - Math.abs(i);
+                const startD = weightR + 1;
+                const endD = startD + 6 - Math.abs(i);
+                drawCtx.strokeStyle = '#1a1a1a';
+                drawCtx.lineWidth = 3 - Math.abs(i) * 0.3;
+                drawCtx.lineCap = 'round';
+                drawCtx.beginPath();
+                drawCtx.moveTo(cx + Math.cos(a) * startD, cy + Math.sin(a) * startD);
+                drawCtx.lineTo(cx + Math.cos(a) * endD, cy + Math.sin(a) * endD);
+                drawCtx.stroke();
                 drawCtx.strokeStyle = color;
-                drawCtx.lineWidth = 2 - Math.abs(i) * 0.3;
+                drawCtx.lineWidth = 1.5;
                 drawCtx.beginPath();
                 drawCtx.moveTo(cx + Math.cos(a) * startD, cy + Math.sin(a) * startD);
                 drawCtx.lineTo(cx + Math.cos(a) * endD, cy + Math.sin(a) * endD);
                 drawCtx.stroke();
             }
-            drawCtx.fillStyle = '#111';
+            // Weight body
+            drawCtx.fillStyle = '#1a1a1a';
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, weightR + 1.5, 0, Math.PI * 2);
+            drawCtx.arc(cx + 1, cy + 1, weightR, 0, Math.PI * 2);
             drawCtx.fill();
-            const wGrad = drawCtx.createRadialGradient(cx - 2, cy - 2, weightR * 0.1, cx, cy, weightR);
-            wGrad.addColorStop(0, '#555');
-            wGrad.addColorStop(0.5, dark);
-            wGrad.addColorStop(1, '#111');
-            drawCtx.fillStyle = wGrad;
+            drawCtx.fillStyle = dark;
             drawCtx.beginPath();
             drawCtx.arc(cx, cy, weightR, 0, Math.PI * 2);
             drawCtx.fill();
+            drawCtx.strokeStyle = '#1a1a1a';
+            drawCtx.lineWidth = 2;
+            drawCtx.beginPath();
+            drawCtx.arc(cx, cy, weightR, 0, Math.PI * 2);
+            drawCtx.stroke();
             drawCtx.strokeStyle = color;
             drawCtx.lineWidth = 2;
             drawCtx.beginPath();
             drawCtx.arc(cx, cy, weightR - 3, 0, Math.PI * 2);
             drawCtx.stroke();
-            drawCtx.strokeStyle = '#444';
+            drawCtx.strokeStyle = '#e0e0e0';
             drawCtx.lineWidth = 1;
             drawCtx.beginPath();
-            drawCtx.arc(cx, cy, weightR * 0.5, 0, Math.PI * 2);
+            drawCtx.arc(cx, cy, weightR * 0.4, 0, Math.PI * 2);
             drawCtx.stroke();
-            drawCtx.fillStyle = '#666';
-            drawCtx.beginPath();
-            drawCtx.arc(cx, cy, 3, 0, Math.PI * 2);
-            drawCtx.fill();
             break;
         }
     }
@@ -1242,13 +1334,30 @@ function buildEnemyCoreSprite(type, isBoss, isChild, size) {
 
     let mainColor, darkColor, accentColor;
     if (isBoss) {
-        mainColor = '#4a2060';
-        darkColor = '#2a1040';
-        accentColor = '#7050a0';
+        mainColor = '#6a4090';
+        darkColor = '#3a2060';
+        accentColor = '#a080d0';
     } else {
         mainColor = typeDef.color.main;
         darkColor = typeDef.color.dark;
         accentColor = typeDef.color.accent;
+    }
+
+    // Doodle helpers
+    function wobbleCircle(cx, cy, radius, fill, stroke, lineW) {
+        sctx.fillStyle = fill;
+        sctx.strokeStyle = stroke;
+        sctx.lineWidth = lineW;
+        sctx.beginPath();
+        for (let a = 0; a <= Math.PI * 2; a += 0.25) {
+            const rr = radius + (Math.random() - 0.5) * 1.2;
+            const x = cx + Math.cos(a) * rr;
+            const y = cy + Math.sin(a) * rr;
+            if (a === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
+        }
+        sctx.closePath();
+        sctx.fill();
+        sctx.stroke();
     }
 
     if (typeDef.flying) {
@@ -1263,53 +1372,46 @@ function buildEnemyCoreSprite(type, isBoss, isChild, size) {
 
         sctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
         sctx.beginPath();
-        sctx.moveTo(nx + 1, ny + 1);
-        sctx.lineTo(lx + 1, ly + 1);
-        sctx.lineTo(rx + 1, ry + 1);
+        sctx.moveTo(nx + 2, ny + 2);
+        sctx.lineTo(lx + 2, ly + 2);
+        sctx.lineTo(rx + 2, ry + 2);
         sctx.closePath();
         sctx.fill();
 
-        const grad = sctx.createLinearGradient(center - triLen * 0.6, center, nx, ny);
-        grad.addColorStop(0, darkColor);
-        grad.addColorStop(0.5, mainColor);
-        grad.addColorStop(1, accentColor);
-        sctx.fillStyle = grad;
+        sctx.fillStyle = mainColor;
+        sctx.strokeStyle = darkColor;
+        sctx.lineWidth = 2;
+        sctx.lineJoin = 'round';
         sctx.beginPath();
         sctx.moveTo(nx, ny);
         sctx.lineTo(lx, ly);
         sctx.lineTo(rx, ry);
         sctx.closePath();
         sctx.fill();
-        sctx.strokeStyle = darkColor;
+        sctx.stroke();
+        // Wing line
+        sctx.strokeStyle = accentColor;
         sctx.lineWidth = 1.5;
+        sctx.beginPath();
+        sctx.moveTo(center - triLen * 0.3, center);
+        sctx.lineTo(center + triLen * 0.6, center);
         sctx.stroke();
     } else {
+        // Drop shadow
         sctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
         sctx.beginPath();
-        sctx.ellipse(center + 1, center + 1, r + 1, r * 0.92, 0, 0, Math.PI * 2);
+        sctx.ellipse(center + 2, center + 2, r + 1, r * 0.92, 0, 0, Math.PI * 2);
         sctx.fill();
 
         if (type === 'dark' && !isBoss) {
-            sctx.strokeStyle = '#444';
-            sctx.lineWidth = 3;
-            sctx.beginPath();
-            sctx.arc(center, center, r + 2, 0, Math.PI * 2);
-            sctx.stroke();
-            sctx.strokeStyle = '#222';
-            sctx.lineWidth = 1.5;
-            sctx.beginPath();
-            sctx.arc(center, center, r + 3.5, 0, Math.PI * 2);
-            sctx.stroke();
+            wobbleCircle(center, center, r + 3, '#222', '#111', 2);
         }
 
-        const grad = sctx.createRadialGradient(
-            center - r * 0.2, center - r * 0.2, r * 0.1,
-            center, center, r
-        );
-        grad.addColorStop(0, accentColor);
-        grad.addColorStop(0.6, mainColor);
-        grad.addColorStop(1, darkColor);
-        sctx.fillStyle = grad;
+        // Body shape
+        sctx.fillStyle = mainColor;
+        sctx.strokeStyle = darkColor;
+        sctx.lineWidth = 2;
+        sctx.lineJoin = 'round';
         sctx.beginPath();
         if (type === 'fast' && !isBoss) {
             sctx.ellipse(center, center, r * 1.3, r * 0.8, 0, 0, Math.PI * 2);
@@ -1319,90 +1421,84 @@ function buildEnemyCoreSprite(type, isBoss, isChild, size) {
             sctx.arc(center, center, r, 0, Math.PI * 2);
         }
         sctx.fill();
-        sctx.strokeStyle = darkColor;
-        sctx.lineWidth = 1.5;
         sctx.stroke();
 
-        sctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-        sctx.lineWidth = 1;
+        // Belly highlight line
+        sctx.strokeStyle = accentColor;
+        sctx.lineWidth = 1.5;
         sctx.beginPath();
-        sctx.moveTo(center, center + r * 0.7);
-        sctx.lineTo(center, center - r * 0.7);
+        sctx.moveTo(center - r * 0.5, center + r * 0.5);
+        sctx.lineTo(center - r * 0.2, center - r * 0.5);
         sctx.stroke();
 
         if (type === 'immune' && !isBoss) {
-            sctx.fillStyle = '#4a8a4a';
+            sctx.fillStyle = darkColor;
             const spikeCount = 8;
             for (let i = 0; i < spikeCount; i++) {
                 const a = (i / spikeCount) * Math.PI * 2;
                 const sx = center + Math.cos(a) * (r + 1);
                 const sy = center + Math.sin(a) * (r + 1);
                 sctx.beginPath();
-                sctx.moveTo(sx + Math.cos(a) * 3, sy + Math.sin(a) * 3);
-                sctx.lineTo(sx + Math.cos(a + 0.4) * 1.5, sy + Math.sin(a + 0.4) * 1.5);
-                sctx.lineTo(sx + Math.cos(a - 0.4) * 1.5, sy + Math.sin(a - 0.4) * 1.5);
+                sctx.moveTo(sx + Math.cos(a) * 4, sy + Math.sin(a) * 4);
+                sctx.lineTo(sx + Math.cos(a + 0.4) * 2, sy + Math.sin(a + 0.4) * 2);
+                sctx.lineTo(sx + Math.cos(a - 0.4) * 2, sy + Math.sin(a - 0.4) * 2);
                 sctx.closePath();
                 sctx.fill();
             }
         }
 
         if (type === 'fast' && !isBoss) {
-            sctx.strokeStyle = 'rgba(255, 100, 50, 0.3)';
-            sctx.lineWidth = 1;
+            sctx.strokeStyle = accentColor;
+            sctx.lineWidth = 1.5;
             for (let i = 0; i < 3; i++) {
                 const offset = (i - 1) * r * 0.4;
                 const sx = center - r * 1.2;
                 const sy = center + offset;
                 sctx.beginPath();
                 sctx.moveTo(sx, sy);
-                sctx.lineTo(sx - r * 0.6, sy);
+                sctx.lineTo(sx - r * 0.7, sy);
                 sctx.stroke();
             }
         }
 
+        // Eyes
         const eyeOffset = r * 0.3;
-        const eyeR = r * 0.2;
+        const eyeR = Math.max(2, r * 0.22);
         const eyeX1 = center + eyeOffset;
         const eyeY1 = center + eyeOffset * 0.55;
         const eyeX2 = center + eyeOffset;
         const eyeY2 = center - eyeOffset * 0.55;
-        sctx.fillStyle = '#ccc';
+        sctx.fillStyle = '#f0f0f0';
         sctx.beginPath();
         sctx.arc(eyeX1, eyeY1, eyeR, 0, Math.PI * 2);
         sctx.fill();
         sctx.beginPath();
         sctx.arc(eyeX2, eyeY2, eyeR, 0, Math.PI * 2);
         sctx.fill();
-        const po = eyeR * 0.3;
         sctx.fillStyle = '#111';
         sctx.beginPath();
-        sctx.arc(eyeX1 + po, eyeY1, eyeR * 0.55, 0, Math.PI * 2);
+        sctx.arc(eyeX1 + eyeR * 0.35, eyeY1, eyeR * 0.5, 0, Math.PI * 2);
         sctx.fill();
         sctx.beginPath();
-        sctx.arc(eyeX2 + po, eyeY2, eyeR * 0.55, 0, Math.PI * 2);
+        sctx.arc(eyeX2 + eyeR * 0.35, eyeY2, eyeR * 0.5, 0, Math.PI * 2);
         sctx.fill();
 
         if (isBoss) {
+            // Boss crown/antennae
             sctx.strokeStyle = darkColor;
-            sctx.lineWidth = 2;
-            const antLen = r * 0.6;
+            sctx.lineWidth = 2.5;
             for (let side of [-1, 1]) {
-                const baseX = center + r * 0.7;
+                const baseX = center + r * 0.6;
                 const baseY = center + side * r * 0.3;
-                const tipAngle = side * 0.5;
-                const tipX = baseX + Math.cos(tipAngle) * antLen;
-                const tipY = baseY + Math.sin(tipAngle) * antLen;
+                const tipX = baseX + r * 0.9;
+                const tipY = baseY + side * r * 0.5;
                 sctx.beginPath();
                 sctx.moveTo(baseX, baseY);
-                sctx.quadraticCurveTo(
-                    baseX + Math.cos(tipAngle) * antLen * 0.5,
-                    baseY + Math.sin(tipAngle) * antLen * 0.5 + side * 3,
-                    tipX, tipY
-                );
+                sctx.quadraticCurveTo(baseX + r * 0.4, baseY + side * r * 0.4, tipX, tipY);
                 sctx.stroke();
                 sctx.fillStyle = '#cc44cc';
                 sctx.beginPath();
-                sctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
+                sctx.arc(tipX, tipY, 3, 0, Math.PI * 2);
                 sctx.fill();
             }
         }
@@ -1430,28 +1526,54 @@ function createDeskBackground() {
     deskBgCanvas.height = canvas.height;
     const bg = deskBgCanvas.getContext('2d');
 
+    // Wooden desk base with subtle grain
     const deskGrad = bg.createLinearGradient(0, 0, canvas.width, canvas.height);
-    deskGrad.addColorStop(0, '#8a7e5a');
-    deskGrad.addColorStop(0.25, '#9a8e68');
-    deskGrad.addColorStop(0.5, '#8a7e58');
-    deskGrad.addColorStop(0.75, '#7a6e4a');
+    deskGrad.addColorStop(0, '#8a7a58');
+    deskGrad.addColorStop(0.25, '#9a8a66');
+    deskGrad.addColorStop(0.5, '#8a7a56');
+    deskGrad.addColorStop(0.75, '#7a6a48');
     deskGrad.addColorStop(1, '#6a5e3a');
     bg.fillStyle = deskGrad;
     bg.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Wood grain scribbles
     bg.strokeStyle = 'rgba(0, 0, 0, 0.04)';
     bg.lineWidth = 1;
-    for (let i = 0; i < canvas.height; i += 2) {
+    for (let i = 0; i < canvas.height; i += 3) {
         bg.beginPath();
         bg.moveTo(0, i + 0.5);
-        bg.lineTo(canvas.width, i + 0.5);
+        const y = i + 0.5;
+        for (let x = 0; x < canvas.width; x += 40) {
+            bg.lineTo(x + 20, y + (Math.random() - 0.5) * 2);
+        }
+        bg.lineTo(canvas.width, y);
         bg.stroke();
     }
-    bg.strokeStyle = 'rgba(255, 255, 255, 0.02)';
-    for (let i = 0; i < canvas.width; i += 4) {
+
+    // Coffee ring stain
+    bg.strokeStyle = 'rgba(80, 60, 40, 0.12)';
+    bg.lineWidth = 3;
+    bg.beginPath();
+    for (let a = 0; a < Math.PI * 2; a += 0.1) {
+        const r = 70 + (Math.random() - 0.5) * 6;
+        const x = 120 + Math.cos(a) * r;
+        const y = 480 + Math.sin(a) * r;
+        if (a === 0) bg.moveTo(x, y); else bg.lineTo(x, y);
+    }
+    bg.closePath();
+    bg.stroke();
+
+    // Pencil marks
+    bg.strokeStyle = 'rgba(60, 60, 60, 0.08)';
+    bg.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+        const x1 = Math.random() * canvas.width;
+        const y1 = Math.random() * canvas.height;
+        const len = 20 + Math.random() * 40;
+        const angle = (Math.random() - 0.5) * 0.5;
         bg.beginPath();
-        bg.moveTo(i + 0.5, 0);
-        bg.lineTo(i + 0.5, canvas.height);
+        bg.moveTo(x1, y1);
+        bg.lineTo(x1 + Math.cos(angle) * len, y1 + Math.sin(angle) * len);
         bg.stroke();
     }
 
@@ -1471,17 +1593,6 @@ function createDeskBackground() {
     bg.fill();
     bg.restore();
 
-    // Second bill
-    bg.save();
-    bg.translate(420, 520);
-    bg.rotate(-0.08);
-    bg.fillStyle = 'rgba(95, 125, 75, 0.2)';
-    bg.fillRect(0, 0, 180, 76);
-    bg.strokeStyle = 'rgba(65, 95, 50, 0.25)';
-    bg.lineWidth = 1;
-    bg.strokeRect(5, 5, 170, 66);
-    bg.restore();
-
     // Coin
     bg.fillStyle = 'rgba(175, 135, 75, 0.35)';
     bg.beginPath();
@@ -1489,24 +1600,6 @@ function createDeskBackground() {
     bg.fill();
     bg.strokeStyle = 'rgba(145, 110, 55, 0.4)';
     bg.lineWidth = 3;
-    bg.stroke();
-    bg.strokeStyle = 'rgba(145, 110, 55, 0.25)';
-    bg.lineWidth = 1;
-    bg.beginPath();
-    bg.arc(650, 490, 25, 0, Math.PI * 2);
-    bg.stroke();
-    bg.fillStyle = 'rgba(220, 200, 150, 0.15)';
-    bg.beginPath();
-    bg.arc(645, 484, 15, 0, Math.PI * 2);
-    bg.fill();
-
-    // Small coin
-    bg.fillStyle = 'rgba(160, 120, 70, 0.3)';
-    bg.beginPath();
-    bg.arc(15, 15, 18, 0, Math.PI * 2);
-    bg.fill();
-    bg.strokeStyle = 'rgba(130, 100, 50, 0.3)';
-    bg.lineWidth = 2;
     bg.stroke();
 }
 
@@ -1521,19 +1614,71 @@ function createBoardBaseLayer() {
     const paperW = (COLS - 2 * BORDER_CELLS) * GRID_SIZE;
     const paperH = (ROWS - 2 * BORDER_CELLS) * GRID_SIZE;
 
-    bg.fillStyle = 'rgba(0, 0, 0, 0.12)';
-    bg.fillRect(paperX + 3, paperY + 3, paperW + 1, paperH + 1);
-    bg.fillStyle = '#ece6d0';
+    // Paper shadow
+    bg.fillStyle = 'rgba(0, 0, 0, 0.14)';
+    bg.fillRect(paperX + 4, paperY + 4, paperW + 2, paperH + 2);
+
+    // Graph paper background
+    bg.fillStyle = '#f4f1e8';
     bg.fillRect(paperX, paperY, paperW, paperH);
-    bg.fillStyle = 'rgba(255, 255, 255, 0.2)';
-    bg.fillRect(paperX, paperY, paperW, 1);
-    bg.fillRect(paperX, paperY, 1, paperH);
+
+    // Graph paper grid lines (blue, hand-drawn feel)
+    bg.strokeStyle = 'rgba(120, 160, 200, 0.35)';
+    bg.lineWidth = 0.6;
+    for (let gx = BORDER_CELLS; gx <= COLS - BORDER_CELLS; gx++) {
+        const x = gx * GRID_SIZE;
+        bg.beginPath();
+        bg.moveTo(x, paperY);
+        for (let y = paperY; y <= paperY + paperH; y += 10) {
+            bg.lineTo(x + (Math.random() - 0.5) * 0.6, y);
+        }
+        bg.lineTo(x, paperY + paperH);
+        bg.stroke();
+    }
+    for (let gy = BORDER_CELLS; gy <= ROWS - BORDER_CELLS; gy++) {
+        const y = gy * GRID_SIZE;
+        bg.beginPath();
+        bg.moveTo(paperX, y);
+        for (let x = paperX; x <= paperX + paperW; x += 10) {
+            bg.lineTo(x, y + (Math.random() - 0.5) * 0.6);
+        }
+        bg.lineTo(paperX + paperW, y);
+        bg.stroke();
+    }
+
+    // Major grid lines every 5 cells
+    bg.strokeStyle = 'rgba(100, 140, 180, 0.55)';
+    bg.lineWidth = 0.9;
+    for (let gx = BORDER_CELLS; gx <= COLS - BORDER_CELLS; gx += 5) {
+        bg.beginPath();
+        bg.moveTo(gx * GRID_SIZE, paperY);
+        bg.lineTo(gx * GRID_SIZE, paperY + paperH);
+        bg.stroke();
+    }
+    for (let gy = BORDER_CELLS; gy <= ROWS - BORDER_CELLS; gy += 5) {
+        bg.beginPath();
+        bg.moveTo(paperX, gy * GRID_SIZE);
+        bg.lineTo(paperX + paperW, gy * GRID_SIZE);
+        bg.stroke();
+    }
+
+    // Hand-drawn paper border
+    bg.strokeStyle = 'rgba(60, 60, 60, 0.4)';
+    bg.lineWidth = 2;
+    bg.lineJoin = 'round';
+    bg.beginPath();
+    bg.moveTo(paperX + (Math.random() - 0.5) * 2, paperY + (Math.random() - 0.5) * 2);
+    bg.lineTo(paperX + paperW + (Math.random() - 0.5) * 2, paperY + (Math.random() - 0.5) * 2);
+    bg.lineTo(paperX + paperW + (Math.random() - 0.5) * 2, paperY + paperH + (Math.random() - 0.5) * 2);
+    bg.lineTo(paperX + (Math.random() - 0.5) * 2, paperY + paperH + (Math.random() - 0.5) * 2);
+    bg.closePath();
+    bg.stroke();
 
     // Openings (wider gaps in border)
     const topOpenW = TOP_OPENING_W * GRID_SIZE;
     const sideOpenH = SIDE_OPENING_H * GRID_SIZE;
     const borderPx = BORDER_CELLS * GRID_SIZE;
-    bg.fillStyle = '#ece6d0';
+    bg.fillStyle = '#f4f1e8';
     bg.fillRect(topOpening * GRID_SIZE, 0, topOpenW, borderPx);
     bg.fillRect(bottomOpening * GRID_SIZE, (ROWS - BORDER_CELLS) * GRID_SIZE, topOpenW, borderPx);
     bg.fillRect(0, leftOpening * GRID_SIZE, borderPx, sideOpenH);
@@ -1585,18 +1730,34 @@ function rebuildBoardWallsLayer() {
         }
     }
 
+    // Draw border walls as thick hand-drawn ink lines
+    bg.strokeStyle = 'rgba(60, 60, 60, 0.45)';
+    bg.lineWidth = 3;
+    bg.lineCap = 'round';
+    bg.lineJoin = 'round';
+
     for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
             if (grid[y][x] !== 1 || towerMask[y * COLS + x]) continue;
 
             const wx = x * GRID_SIZE;
             const wy = y * GRID_SIZE;
-            bg.fillStyle = 'rgba(0, 0, 0, 0.06)';
-            bg.fillRect(wx, wy, GRID_SIZE, 1);
-            bg.fillRect(wx, wy, 1, GRID_SIZE);
-            bg.fillStyle = 'rgba(255, 255, 255, 0.04)';
-            bg.fillRect(wx, wy + GRID_SIZE - 1, GRID_SIZE, 1);
-            bg.fillRect(wx + GRID_SIZE - 1, wy, 1, GRID_SIZE);
+            const cx = wx + GRID_SIZE / 2;
+            const cy = wy + GRID_SIZE / 2;
+
+            // Draw a rough ink "X" or block for walls
+            bg.beginPath();
+            bg.moveTo(wx + 2, wy + 2);
+            bg.lineTo(wx + GRID_SIZE - 2, wy + GRID_SIZE - 2);
+            bg.moveTo(wx + GRID_SIZE - 2, wy + 2);
+            bg.lineTo(wx + 2, wy + GRID_SIZE - 2);
+            bg.stroke();
+
+            // Tiny center dot
+            bg.fillStyle = 'rgba(60, 60, 60, 0.3)';
+            bg.beginPath();
+            bg.arc(cx, cy, 1.5, 0, Math.PI * 2);
+            bg.fill();
         }
     }
 
@@ -1757,8 +1918,8 @@ function drawEnemyInfo() {
 function updateFloatingTexts() {
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         const ft = floatingTexts[i];
-        ft.y -= 0.8;
-        ft.life--;
+        ft.y -= 0.8 * frameDelta;
+        ft.life -= frameDelta;
         if (ft.life <= 0) {
             floatingTexts.splice(i, 1);
         }
@@ -1796,15 +1957,18 @@ function drawWaveBar() {
     const cellH = barH - 6;
     const cellY = barY + 3;
 
-    // Current wave = level - 1 (level increments immediately after spawnWave)
-    const currentWave = Math.min(MAX_WAVES, Math.max(1, level - 1));
+    // The wave counting down is `level` (level increments right after a spawn);
+    // the just-spawned wave is `level - 1`.
+    const nextWave = Math.min(MAX_WAVES, Math.max(1, level));
+    const activeWave = nextWave - 1;
 
-    // Progress toward next wave: 0 = just spawned, 1 = about to spawn next
+    // Progress toward the next wave: 0 just after a spawn, 1 when it starts.
     const waveProgress = WAVE_DELAY > 0 ? Math.max(0, Math.min(1, 1 - waveTimer / WAVE_DELAY)) : 1;
 
-    // Smooth scroll: anchor the current wave at ~20% from left edge
+    // Fixed "now" slot. The next wave slides into it as the timer runs out, so
+    // the incoming level crosses the cursor exactly when it is due to start.
     const anchorX = canvas.width * 0.18;
-    const scrollOffset = anchorX - (currentWave - 1) * cellStep - waveProgress * cellStep;
+    const scrollOffset = anchorX + (1 - waveProgress) * cellStep - (nextWave - 1) * cellStep;
     const visiblePad = 20;
     const minWave = Math.max(1, Math.ceil(((-visiblePad - scrollOffset - cellW) / cellStep) + 1));
     const maxWave = Math.min(MAX_WAVES, Math.floor(((canvas.width + visiblePad - scrollOffset) / cellStep) + 1));
@@ -1821,8 +1985,8 @@ function drawWaveBar() {
     for (let w = minWave; w <= maxWave; w++) {
         const x = scrollOffset + (w - 1) * cellStep;
         const wMeta = getWaveMeta(w);
-        const isCurrent = w === currentWave;
-        const isPast = w < currentWave;
+        const isNext = w === nextWave;
+        const isPast = w < activeWave;
 
         // Cell background
         if (isPast) {
@@ -1833,18 +1997,8 @@ function drawWaveBar() {
         drawRoundedRect(x, cellY, cellW, cellH, 4);
         ctx.fill();
 
-        if (isCurrent) {
-            // Progress fill inside current cell
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(x, cellY, cellW * waveProgress, cellH);
-            ctx.clip();
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            drawRoundedRect(x, cellY, cellW, cellH, 4);
-            ctx.fill();
-            ctx.restore();
-
-            // Glowing border
+        if (isNext) {
+            // Glowing border on the level that is about to start.
             ctx.strokeStyle = '#fff';
             ctx.lineWidth = 2;
             ctx.shadowColor = '#fff';
@@ -1863,7 +2017,7 @@ function drawWaveBar() {
         ctx.font = 'bold 12px Arial, sans-serif';
         if (isPast) {
             ctx.fillStyle = 'rgba(100,100,100,0.5)';
-        } else if (isCurrent) {
+        } else if (isNext) {
             ctx.fillStyle = '#fff';
         } else {
             ctx.fillStyle = wMeta.color;
@@ -1871,13 +2025,27 @@ function drawWaveBar() {
         ctx.fillText(wMeta.label, x + 7, cellY + cellH / 2 + 2);
     }
 
-    // Small triangle marker pointing down at the current wave
-    const markerCenterX = scrollOffset + (currentWave - 1) * cellStep + cellW / 2;
+    // Fixed "now" slot: a progress bar fills toward the next wave and bracket
+    // ticks mark where it will land.
+    const slotX = anchorX;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.fillRect(slotX, barY + barH - 3, cellW * waveProgress, 3);
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(slotX, cellY);
+    ctx.lineTo(slotX, cellY + cellH);
+    ctx.moveTo(slotX + cellW, cellY);
+    ctx.lineTo(slotX + cellW, cellY + cellH);
+    ctx.stroke();
+
+    // Fixed down arrow marking "now".
+    const cursorX = slotX + cellW / 2;
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.moveTo(markerCenterX - 5, barY + 1);
-    ctx.lineTo(markerCenterX + 5, barY + 1);
-    ctx.lineTo(markerCenterX, barY + 6);
+    ctx.moveTo(cursorX - 5, barY + 1);
+    ctx.lineTo(cursorX + 5, barY + 1);
+    ctx.lineTo(cursorX, barY + 6);
     ctx.closePath();
     ctx.fill();
 
@@ -1916,7 +2084,7 @@ function drawAdjustableTower() {
     if (!adjustableTower) return;
     // Tick down the timer
     if (!gamePaused) {
-        adjustableTimer--;
+        adjustableTimer -= frameDelta;
         if (adjustableTimer <= 0) {
             adjustableTower = null;
             adjustableTimer = 0;
@@ -2025,13 +2193,12 @@ function drawHoverPreview() {
 // Enemy class
 // ==========================================
 class Enemy {
-    constructor(type = 'normal', isBoss = false) {
+    constructor(type = 'normal', isBoss = false, diffHpMult = 1.0) {
         this.type = type;
         const typeDef = ENEMY_TYPES[type];
         this.alive = true;
         this.pendingDeath = false;
         this.spawnDirection = Math.random() < 0.5 ? 'top' : 'left';
-        this.start = openings[this.spawnDirection];
         this.goal = openings[this.spawnDirection].goal;
         // Spawn at center of the wider opening
         if (this.spawnDirection === 'top') {
@@ -2043,9 +2210,9 @@ class Enemy {
         }
         this.isBoss = isBoss;
 
-        // HP scales with level and type
-        const baseHP = isBoss ? (500 + level * 50) : (50 + level * 5);
-        this.maxHealth = Math.floor(baseHP * typeDef.hpMult);
+        // HP scales with level, type, and difficulty
+        const baseHP = isBoss ? (400 + level * 50) : (60 + level * 12);
+        this.maxHealth = Math.floor(baseHP * typeDef.hpMult * diffHpMult);
         this.health = this.maxHealth;
 
         // Speed scales with level and type (capped so enemies can't outrun projectiles)
@@ -2058,7 +2225,7 @@ class Enemy {
         this.size = typeDef.sizeMult ? Math.floor(baseSize * typeDef.sizeMult) : baseSize;
 
         // Rewards
-        this.goldReward = isBoss ? (50 + level * 5) : typeDef.gold;
+        this.goldReward = isBoss ? (10 + level * 2) : typeDef.gold;
         this.scoreReward = isBoss ? (100 + level * 10) : typeDef.score;
 
         this.leakDamage = isBoss ? 5 : 1;
@@ -2087,7 +2254,13 @@ class Enemy {
             this.path = []; // empty path — uses fly logic
             this.pathIndex = 0;
         } else {
-            this.path = aStar(this.start, this.goal);
+            // Path from the cell the enemy actually spawns in (the opening's
+            // border cell) so it doesn't first walk up/left to a phantom center.
+            const startCell = {
+                x: Math.floor(this.x / GRID_SIZE),
+                y: Math.floor(this.y / GRID_SIZE)
+            };
+            this.path = aStar(startCell, this.goal);
             this.pathIndex = 0;
         }
 
@@ -2099,7 +2272,7 @@ class Enemy {
 
         // Stun: skip all movement
         if (this.stunTimer > 0) {
-            this.stunTimer--;
+            this.stunTimer -= frameDelta;
             return;
         }
 
@@ -2107,9 +2280,9 @@ class Enemy {
         if (this.isFlying) {
             // Handle slow effect (if not immune)
             if (this.slowTimer > 0 && !this.slowImmune) {
-                this.slowTimer--;
+                this.slowTimer -= frameDelta;
                 this.speed = this.baseSpeed * (1 - this.slowFactor);
-                if (this.slowTimer === 0) {
+                if (this.slowTimer <= 0) {
                     this.speed = this.baseSpeed;
                     this.slowFactor = 0;
                 }
@@ -2118,14 +2291,16 @@ class Enemy {
             const dx = this.flyTargetX - this.x;
             const dy = this.flyTargetY - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < this.speed) {
+            const step = this.speed * frameDelta;
+            if (step <= 0) return;
+            if (distance < step) {
                 // Reached exit — leak
                 baseHealth -= this.leakDamage;
                 despawnEnemy(this);
                 if (baseHealth <= 0) gameOver = true;
             } else {
-                this.x += (dx / distance) * this.speed;
-                this.y += (dy / distance) * this.speed;
+                this.x += (dx / distance) * step;
+                this.y += (dy / distance) * step;
                 this.angle = Math.atan2(dy, dx);
             }
             return;
@@ -2133,8 +2308,9 @@ class Enemy {
 
         // Non-flying path following
         if (this.pathIndex >= this.path.length) {
-            if (Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < this.speed &&
-                Math.abs(this.y - this.goal.y * GRID_SIZE - GRID_SIZE / 2) < this.speed) {
+            const reach = this.speed * frameDelta;
+            if (Math.abs(this.x - this.goal.x * GRID_SIZE - GRID_SIZE / 2) < reach &&
+                Math.abs(this.y - this.goal.y * GRID_SIZE - GRID_SIZE / 2) < reach) {
                 baseHealth -= this.leakDamage;
                 despawnEnemy(this);
                 if (baseHealth <= 0) gameOver = true;
@@ -2144,9 +2320,9 @@ class Enemy {
 
         // Handle slow effect (skip if slow immune)
         if (this.slowTimer > 0 && !this.slowImmune) {
-            this.slowTimer--;
+            this.slowTimer -= frameDelta;
             this.speed = this.baseSpeed * (1 - this.slowFactor);
-            if (this.slowTimer === 0) {
+            if (this.slowTimer <= 0) {
                 this.speed = this.baseSpeed;
                 this.slowFactor = 0;
             }
@@ -2159,13 +2335,14 @@ class Enemy {
         let dy = ty - this.y;
         let distance = Math.sqrt(dx * dx + dy * dy);
 
-        if (distance < this.speed) {
+        const move = this.speed * frameDelta;
+        if (distance < move) {
             this.x = tx;
             this.y = ty;
             this.pathIndex++;
-        } else {
-            this.x += (dx / distance) * this.speed;
-            this.y += (dy / distance) * this.speed;
+        } else if (move > 0) {
+            this.x += (dx / distance) * move;
+            this.y += (dy / distance) * move;
             this.angle = Math.atan2(dy, dx);
         }
     }
@@ -2284,7 +2461,8 @@ class Projectile {
         const dx = this.target.x - this.x;
         const dy = this.target.y - this.y;
         const distanceSq = dx * dx + dy * dy;
-        const speedSq = this.speed * this.speed;
+        const step = this.speed * frameDelta;
+        const speedSq = step * step;
 
         if (distanceSq < speedSq) {
             // Apply armor damage reduction
@@ -2298,8 +2476,8 @@ class Projectile {
                 queueEnemyDeath(this.target);
             }
 
-            // Splash damage (Squirt)
-            if (this.type === 'squirt' && this.splashRadius > 0) {
+            // Splash damage (Dart)
+            if (this.type === 'dart' && this.splashRadius > 0) {
                 const baseSplash = Math.floor(this.damage * 0.5);
                 const splashRadiusSq = this.splashRadius * this.splashRadius;
                 for (let enemy of enemies) {
@@ -2328,10 +2506,10 @@ class Projectile {
             }
 
             removeProjectile(this);
-        } else {
+        } else if (step > 0) {
             const distance = Math.sqrt(distanceSq);
-            this.x += (dx / distance) * this.speed;
-            this.y += (dy / distance) * this.speed;
+            this.x += (dx / distance) * step;
+            this.y += (dy / distance) * step;
         }
     }
 
@@ -2345,49 +2523,62 @@ class Projectile {
 
         switch (this.type) {
             case 'pellet':
-                // Small green circle
+                // Small ink dot with outline
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.arc(0.5, 0.5, 3.5, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(0, 0, 3, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                ctx.beginPath();
-                ctx.arc(0.5, -0.5, 1, 0, Math.PI * 2);
-                ctx.fill();
                 break;
 
             case 'squirt':
-                // Blue teardrop
+                // Blobby ink drop
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.moveTo(6, 0.5);
+                ctx.quadraticCurveTo(0.5, -4.5, -4.5, 0.5);
+                ctx.quadraticCurveTo(0.5, 4.5, 6, 0.5);
+                ctx.fill();
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.moveTo(5, 0);
                 ctx.quadraticCurveTo(0, -4, -4, 0);
                 ctx.quadraticCurveTo(0, 4, 5, 0);
                 ctx.fill();
-                ctx.fillStyle = 'rgba(255,255,255,0.35)';
-                ctx.beginPath();
-                ctx.arc(1, -1, 1.5, 0, Math.PI * 2);
-                ctx.fill();
                 break;
 
             case 'dart':
-                // Dark dart with orange tip
-                ctx.fillStyle = '#333';
+                // Simple dart
+                ctx.fillStyle = '#1a1a1a';
                 ctx.beginPath();
-                ctx.moveTo(5, 0);
-                ctx.lineTo(-3, -2.5);
+                ctx.moveTo(6, 0);
+                ctx.lineTo(-3, -3);
                 ctx.lineTo(-1, 0);
-                ctx.lineTo(-3, 2.5);
+                ctx.lineTo(-3, 3);
                 ctx.closePath();
                 ctx.fill();
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
-                ctx.arc(4, 0, 1.5, 0, Math.PI * 2);
+                ctx.moveTo(4.5, 0);
+                ctx.lineTo(-2, -2);
+                ctx.lineTo(-0.5, 0);
+                ctx.lineTo(-2, 2);
+                ctx.closePath();
                 ctx.fill();
                 break;
 
             case 'swarm':
-                // Small purple triangle
+                // Small arrow head
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.moveTo(5, 0);
+                ctx.lineTo(-3.5, -2.5);
+                ctx.lineTo(-3.5, 2.5);
+                ctx.closePath();
+                ctx.fill();
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.moveTo(4, 0);
@@ -2398,22 +2589,16 @@ class Projectile {
                 break;
 
             case 'frost':
-                // Cyan diamond/crystal
-                ctx.fillStyle = this.color;
-                ctx.globalAlpha = 0.8;
+                // Sketchy snowflake
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
                 ctx.beginPath();
-                ctx.moveTo(4, 0);
-                ctx.lineTo(0, -3);
-                ctx.lineTo(-4, 0);
-                ctx.lineTo(0, 3);
-                ctx.closePath();
-                ctx.fill();
-                ctx.fillStyle = '#ffffff';
-                ctx.globalAlpha = 0.5;
-                ctx.beginPath();
-                ctx.arc(0, 0, 1.5, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
+                ctx.moveTo(-4, 0); ctx.lineTo(4, 0);
+                ctx.moveTo(0, -4); ctx.lineTo(0, 4);
+                ctx.moveTo(-2.8, -2.8); ctx.lineTo(2.8, 2.8);
+                ctx.moveTo(-2.8, 2.8); ctx.lineTo(2.8, -2.8);
+                ctx.stroke();
                 break;
         }
 
@@ -2460,12 +2645,11 @@ class Tower {
         const upgradeCost = nextLevel.upgradeCost;
         if (money < upgradeCost) return;
 
-        // Pay cost immediately, start upgrade timer
+        // Pay cost and start upgrade timer; later levels take longer
         money -= upgradeCost;
         this.totalCost += upgradeCost;
         this.pendingLevel = nextLevel;
-        // Delay scales with level
-        const delays = [60, 90, 120, 150, 210];
+        const delays = [60, 90, 130, 180, 240, 320];
         const delay = delays[Math.min(this.level - 1, delays.length - 1)];
         this.upgradeTimer = delay;
         this.upgradeTotal = delay;
@@ -2486,7 +2670,7 @@ class Tower {
     }
 
     sell() {
-        const sellValue = gameStarted ? Math.floor(this.totalCost * 0.6) : this.totalCost;
+        const sellValue = gameStarted ? Math.floor(this.totalCost * 0.7) : this.totalCost;
         money += sellValue;
         // Release all 4 cells
         for (let dy = 0; dy < 2; dy++)
@@ -2505,25 +2689,28 @@ class Tower {
 
         // Upgrade in progress — count down and don't fire
         if (this.upgradeTimer > 0) {
-            this.upgradeTimer--;
-            if (this.upgradeTimer === 0) {
+            this.upgradeTimer -= frameDelta;
+            if (this.upgradeTimer <= 0) {
+                this.upgradeTimer = 0;
                 this.completeUpgrade();
             }
             return;
         }
 
-        if (this.cooldown > 0) this.cooldown--;
+        if (this.cooldown > 0) this.cooldown -= frameDelta;
 
         const typeDef = TOWER_TYPES[this.type];
         const levelStats = typeDef.levels[this.level - 1];
         const isMelee = !!typeDef.melee;
         const isMultiTarget = !!typeDef.multiTarget;
+        const isFrostAura = !!typeDef.slowAura;
         const swarmAirOnly = this.type === 'swarm';
         const rangeSq = this.range * this.range;
 
-        let nearestEnemy = null;
-        let nearestDistSq = Infinity;
+        let targetEnemy = null;
+        let closestToExitDistSq = Infinity;
         const meleeTargets = isMelee ? [] : null;
+        const auraTargets = isFrostAura ? [] : null;
         const multiTargets = isMultiTarget ? [] : null;
         const multiLimit = isMultiTarget ? (levelStats.targets || 1) : 0;
 
@@ -2538,9 +2725,14 @@ class Tower {
             const distSq = dx * dx + dy * dy;
             if (distSq > rangeSq) continue;
 
-            if (distSq < nearestDistSq) {
-                nearestDistSq = distSq;
-                nearestEnemy = enemy;
+            // Target priority: enemy closest to its exit (furthest along the path)
+            const goalX = enemy.isFlying ? enemy.flyTargetX : enemy.goal.x * GRID_SIZE + GRID_SIZE / 2;
+            const goalY = enemy.isFlying ? enemy.flyTargetY : enemy.goal.y * GRID_SIZE + GRID_SIZE / 2;
+            const distToGoalSq = (enemy.x - goalX) ** 2 + (enemy.y - goalY) ** 2;
+
+            if (distToGoalSq < closestToExitDistSq) {
+                closestToExitDistSq = distToGoalSq;
+                targetEnemy = enemy;
             }
 
             if (isMelee) {
@@ -2548,13 +2740,18 @@ class Tower {
                 continue;
             }
 
+            if (isFrostAura) {
+                auraTargets.push(enemy);
+                continue;
+            }
+
             if (isMultiTarget) {
                 let insertAt = multiTargets.length;
-                while (insertAt > 0 && distSq < multiTargets[insertAt - 1].distSq) {
+                while (insertAt > 0 && distToGoalSq < multiTargets[insertAt - 1].distToGoalSq) {
                     insertAt--;
                 }
                 if (insertAt < multiLimit) {
-                    multiTargets.splice(insertAt, 0, { enemy, distSq });
+                    multiTargets.splice(insertAt, 0, { enemy, distToGoalSq });
                     if (multiTargets.length > multiLimit) {
                         multiTargets.length = multiLimit;
                     }
@@ -2562,13 +2759,26 @@ class Tower {
             }
         }
 
-        if (nearestEnemy) {
+        // Frost: continuous area slow so even the fastest creeps are affected.
+        // The original Frost tower was an aura (no projectile); a projectile was
+        // too slow to ever catch speed-5 creeps at higher levels.
+        if (isFrostAura && auraTargets.length > 0) {
+            for (const enemy of auraTargets) {
+                if (enemy.slowImmune) continue;
+                if (!enemy.slowTimer || enemy.slowFactor < levelStats.slowFactor) {
+                    enemy.slowFactor = levelStats.slowFactor;
+                }
+                enemy.slowTimer = Math.max(enemy.slowTimer, levelStats.slowDuration);
+            }
+        }
+
+        if (targetEnemy) {
             this.angle = Math.atan2(
-                nearestEnemy.y - this.y,
-                nearestEnemy.x - this.x
+                targetEnemy.y - this.y,
+                targetEnemy.x - this.x
             );
 
-            if (this.cooldown === 0) {
+            if (this.cooldown <= 0) {
                 if (isMelee) {
                     // Bash: melee AoE — damage all enemies in range instantly
                     for (const enemy of meleeTargets) {
@@ -2587,8 +2797,18 @@ class Tower {
                     }
                     // Track shockwave animation
                     this.bashFlashTimer = 10;
+                } else if (isFrostAura) {
+                    // Frost pulse: area damage (slow is applied every frame above).
+                    for (const enemy of auraTargets) {
+                        const actualDamage = enemy.armor > 0
+                            ? Math.max(1, this.damage - enemy.armor)
+                            : this.damage;
+                        enemy.health -= actualDamage;
+                        if (enemy.health <= 0) queueEnemyDeath(enemy);
+                    }
+                    this.frostFlashTimer = 12;
                 } else if (isMultiTarget) {
-                    // Multi-target: fire at nearest valid targets (up to per-level limit)
+                    // Multi-target: fire at targets closest to exit (up to per-level limit)
                     for (let i = 0; i < multiTargets.length; i++) {
                         projectiles.push(new Projectile(
                             this.x, this.y,
@@ -2601,17 +2821,12 @@ class Tower {
                     // Single target
                     const proj = new Projectile(
                         this.x, this.y,
-                        nearestEnemy,
+                        targetEnemy,
                         this.damage,
                         this.type
                     );
-                    // Pass frost slow values from current level
-                    if (this.type === 'frost') {
-                        proj.slowFactor = levelStats.slowFactor;
-                        proj.slowDuration = levelStats.slowDuration;
-                    }
-                    // Per-level splash radius override (e.g. Typhoon)
-                    if (this.type === 'squirt' && levelStats.splashRadius) {
+                    // Per-level splash radius override (Dart)
+                    if (this.type === 'dart' && levelStats.splashRadius) {
                         proj.splashRadius = levelStats.splashRadius;
                     }
                     projectiles.push(proj);
@@ -2622,7 +2837,8 @@ class Tower {
         }
 
         // Decay bash flash timer
-        if (this.bashFlashTimer > 0) this.bashFlashTimer--;
+        if (this.bashFlashTimer > 0) this.bashFlashTimer -= frameDelta;
+        if (this.frostFlashTimer > 0) this.frostFlashTimer -= frameDelta;
     }
 
     draw() {
@@ -2644,10 +2860,10 @@ class Tower {
             ctx.stroke();
         }
 
-        // Dashed border
-        ctx.strokeStyle = 'rgba(40, 40, 40, 0.55)';
+        // Hand-drawn cell border
+        ctx.strokeStyle = 'rgba(60, 60, 60, 0.35)';
         ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
+        ctx.setLineDash([4, 4]);
         ctx.strokeRect(gx + 2, gy + 2, gs - 4, gs - 4);
         ctx.setLineDash([]);
 
@@ -2693,6 +2909,26 @@ class Tower {
             }
         }
 
+        // Frost aura: constant ring plus an expanding pulse on each damage tick.
+        if (typeDef.slowAura) {
+            const auraAlpha = 0.16 + Math.sin(frameNow * 0.004) * 0.05;
+            ctx.strokeStyle = `rgba(128, 224, 240, ${auraAlpha})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, this.range, 0, Math.PI * 2);
+            ctx.stroke();
+            if (this.frostFlashTimer > 0) {
+                const progress = 1 - (this.frostFlashTimer / 12);
+                const waveR = this.range * progress;
+                const alpha = 0.5 * (1 - progress);
+                ctx.strokeStyle = `rgba(160, 240, 255, ${alpha})`;
+                ctx.lineWidth = 3 * (1 - progress) + 1;
+                ctx.beginPath();
+                ctx.arc(cx, cy, waveR, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
         // Muzzle flash (skip for melee towers)
         if (!typeDef.melee && this.cooldown > this.fireRate - 4) {
             const flashLens = { pellet: 0.52, squirt: 0.40, dart: 0.38, swarm: 0.30, frost: 0.33 };
@@ -2731,7 +2967,7 @@ class Tower {
         // Upgrade progress indicator
         if (this.upgradeTimer > 0 && this.upgradeTotal > 0) {
             const progress = 1 - (this.upgradeTimer / this.upgradeTotal);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
             ctx.fillRect(gx, gy, gs, gs);
             ctx.strokeStyle = '#ffcc00';
             ctx.lineWidth = 3;
@@ -2775,28 +3011,63 @@ function getWaveCount(type, lvl) {
 // Wave spawning function
 function spawnWave() {
     if (gameOver || !gameStarted) return;
+    if (level >= MAX_WAVES) return;
     waveTimer = WAVE_DELAY;
+    lastWaveSpawnTs = performance.now();
     waveJustCleared = false;
+
+    // Apply difficulty HP multiplier to wave enemies
+    const diff = DIFFICULTY_LEVELS[difficulty] || DIFFICULTY_LEVELS.easy;
 
     const waveType = getWaveType(level);
     currentWaveType = waveType;
 
+    const hpMult = diff.hpMult || 1.0;
     if (waveType === 'boss') {
         // Boss gets a random type trait
         const bossTypes = ['normal', 'fast', 'immune', 'spawn', 'dark', 'flying'];
         const bossVariant = bossTypes[Math.floor(Math.random() * bossTypes.length)];
         currentWaveType = 'boss';
-        enemies.push(new Enemy(bossVariant, true));
+        enemies.push(new Enemy(bossVariant, true, hpMult));
     } else {
         const count = getWaveCount(waveType, level);
-        const spawnDelay = waveType === 'group' ? 300 : 500;
+        const spawnDelayFrames = (waveType === 'group' ? 300 : 500) / (1000 / 60);
+        // Queue spawns in game time so they respect pause and delta time.
+        // Accumulate so overlapping waves both contribute to the pending count.
+        pendingSpawns += count;
         for (let i = 0; i < count; i++) {
-            setTimeout(() => {
-                if (!gameOver) enemies.push(new Enemy(waveType, false));
-            }, i * spawnDelay);
+            spawnQueue.push({
+                delay: i * spawnDelayFrames,
+                type: waveType,
+                isBoss: false,
+                hpMult
+            });
         }
     }
     level++;
+}
+
+// Advance queued enemy spawns. Called from the main loop so spawning pauses
+// with the game and scales with the real frame time.
+function updateSpawnQueue() {
+    if (spawnQueue.length === 0) return;
+    for (let i = spawnQueue.length - 1; i >= 0; i--) {
+        const pendingSpawn = spawnQueue[i];
+        pendingSpawn.delay -= frameDelta;
+        if (pendingSpawn.delay <= 0) {
+            spawnQueue.splice(i, 1);
+            pendingSpawns = Math.max(0, pendingSpawns - 1);
+            if (!gameOver) {
+                enemies.push(new Enemy(pendingSpawn.type, pendingSpawn.isBoss, pendingSpawn.hpMult));
+            }
+        }
+    }
+}
+
+// Cancel all scheduled enemy spawns (used on reset/load).
+function clearScheduledSpawns() {
+    spawnQueue.length = 0;
+    pendingSpawns = 0;
 }
 
 // Reset game function
@@ -2807,17 +3078,19 @@ function resetGame() {
     pendingEnemyDeaths = [];
     enemyListDirty = false;
     projectileListDirty = false;
-    money = 1000;
+    const diff = DIFFICULTY_LEVELS[difficulty] || DIFFICULTY_LEVELS.easy;
+    money = diff.gold;
     score = 0;
-    baseHealth = 20;
+    baseHealth = diff.lives;
     gameOver = false;
     level = 1;
     selectedTower = null;
     gameStarted = false;
     gamePaused = false;
     waveTimer = 0;
-    difficulty = difficultySelect.value;
-    WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
+    if (!DIFFICULTY_LEVELS[difficulty]) difficulty = 'easy';
+    WAVE_DELAY = DIFFICULTY_LEVELS[difficulty].delay;
+    clearScheduledSpawns();
     waveJustCleared = false;
     currentWaveType = 'normal';
     selectedEnemy = null;
@@ -2833,6 +3106,7 @@ function resetGame() {
     nextWaveButton.disabled = true;
     pauseButton.disabled = true;
     pauseButton.textContent = 'Pause';
+    showDifficultyModal();
 }
 
 // Show tower preview on hover (before placing)
@@ -2850,18 +3124,18 @@ function showTowerPreview(type) {
     const speed = stats.fireRate <= 30 ? 'Fast' : stats.fireRate <= 50 ? 'Medium' : 'Slow';
 
     let statsHtml = `
-        <span style="color:#aaa;font-style:italic">${typeDef.description}</span><br>
-        <span style="color:#ffcc00">Cost: $${typeDef.cost}</span><br>
+        <span style="color:#6a6255;font-style:italic">${typeDef.description}</span><br>
+        <span style="color:#8a6a0a;font-weight:bold">Cost: $${typeDef.cost}</span><br>
         Damage: ${stats.damage}<br>
         Range: ${stats.range}<br>
         Speed: ${speed}
     `;
 
-    if (type === 'squirt') {
+    if (type === 'dart') {
         statsHtml += `<br>Splash: ${typeDef.splashRadius}px`;
     }
     if (type === 'frost') {
-        statsHtml += `<br>Slow: ${Math.round(stats.slowFactor * 100)}%`;
+        statsHtml += `<br>Slow: ${Math.round(stats.slowFactor * 100)}% (area)`;
     }
     if (type === 'swarm') {
         statsHtml += `<br>Targets: ${stats.targets} (air only)`;
@@ -2872,7 +3146,7 @@ function showTowerPreview(type) {
     }
 
     if (typeDef.evolutionName) {
-        statsHtml += `<br><span style="color:#ffe080;font-size:11px">Evolves to ${typeDef.evolutionName} at Lv${MAX_TOWER_LEVEL}</span>`;
+        statsHtml += `<br><span style="color:#7a6020;font-size:11px">Evolves to ${typeDef.evolutionName} at Lv${MAX_TOWER_LEVEL}</span>`;
     }
 
     towerStats.innerHTML = statsHtml;
@@ -2896,28 +3170,52 @@ function updateTowerPanel() {
 
     const lvlStats = typeDef.levels[selectedTower.level - 1];
     const currentSplash = lvlStats.splashRadius || typeDef.splashRadius;
+    const isMax = selectedTower.level >= MAX_TOWER_LEVEL;
+    const nextStats = isMax ? null : typeDef.levels[selectedTower.level];
 
-    let statsHtml = `
-        Level: ${selectedTower.level}/${MAX_TOWER_LEVEL}<br>
-        Damage: ${selectedTower.damage}<br>
-        Range: ${selectedTower.range}<br>
-        Fire Rate: ${selectedTower.fireRate} frames<br>
-        Total Cost: $${selectedTower.totalCost}<br>
-        Sell Value: $${gameStarted ? Math.floor(selectedTower.totalCost * 0.6) : selectedTower.totalCost}
-    `;
+    // Build a row that shows current -> next values when an upgrade is
+    // available, so players can compare before spending gold (classic DTD
+    // behaviour). Rows with no change stay single-valued to reduce noise.
+    function statRow(label, cur, next, suffix = '', lowerIsBetter = false) {
+        const curTxt = `${cur}${suffix}`;
+        if (next == null || next === cur) return `${label}: <b>${curTxt}</b>`;
+        const up = typeof next === 'number' && typeof cur === 'number' && next > cur;
+        const down = typeof next === 'number' && typeof cur === 'number' && next < cur;
+        const arrow = up ? '\u25B2' : (down ? '\u25BC' : '\u2192');
+        // Green = improvement for the player, red = regression. For stats where a
+        // lower number is better (fire rate in frames), invert the colouring.
+        const improved = lowerIsBetter ? down : up;
+        const worsened = lowerIsBetter ? up : down;
+        const color = improved ? '#2a8a2a' : (worsened ? '#aa4430' : '#6a6255');
+        return `${label}: <b>${curTxt}</b> <span style="color:${color};font-weight:bold">${arrow} ${next}${suffix}</span>`;
+    }
 
-    if (selectedTower.type === 'squirt') {
-        statsHtml += `<br>Splash: ${currentSplash}px`;
+    let statsHtml = `<span style="color:#4a4520">Level: ${selectedTower.level}/${MAX_TOWER_LEVEL}${isMax ? ' (MAX)' : ''}</span><br>`;
+    statsHtml += statRow('Damage', selectedTower.damage, nextStats ? nextStats.damage : null) + '<br>';
+    statsHtml += statRow('Range', selectedTower.range, nextStats ? nextStats.range : null) + '<br>';
+    statsHtml += statRow('Fire Rate', selectedTower.fireRate, nextStats ? nextStats.fireRate : null, ' frames', true) + '<br>';
+    if (selectedTower.type === 'dart') {
+        statsHtml += statRow('Splash', currentSplash, nextStats ? (nextStats.splashRadius || typeDef.splashRadius) : null, 'px') + '<br>';
     }
     if (selectedTower.type === 'frost') {
-        statsHtml += `<br>Slow: ${Math.round(lvlStats.slowFactor * 100)}% for ${(lvlStats.slowDuration / 60).toFixed(1)}s`;
+        statsHtml += statRow('Slow', Math.round(lvlStats.slowFactor * 100), nextStats ? Math.round(nextStats.slowFactor * 100) : null, '% (area)') + '<br>';
+        statsHtml += statRow('Slow Time', (lvlStats.slowDuration / 60).toFixed(1), nextStats ? (nextStats.slowDuration / 60).toFixed(1) : null, 's') + '<br>';
     }
     if (selectedTower.type === 'swarm') {
-        statsHtml += `<br>Targets: ${lvlStats.targets}`;
+        statsHtml += statRow('Targets', lvlStats.targets, nextStats ? nextStats.targets : null) + '<br>';
     }
     if (selectedTower.type === 'bash') {
-        statsHtml += `<br>Stun: ${Math.round(lvlStats.stunChance * 100)}% for ${(lvlStats.stunDuration / 60).toFixed(1)}s`;
-        statsHtml += `<br>Melee AoE`;
+        statsHtml += statRow('Stun', Math.round(lvlStats.stunChance * 100), nextStats ? Math.round(nextStats.stunChance * 100) : null, '%') + '<br>';
+        statsHtml += statRow('Stun Time', (lvlStats.stunDuration / 60).toFixed(1), nextStats ? (nextStats.stunDuration / 60).toFixed(1) : null, 's') + '<br>';
+    }
+    statsHtml += `Total Cost: <b>$${selectedTower.totalCost}</b><br>`;
+    statsHtml += `Sell Value: <b>$${gameStarted ? Math.floor(selectedTower.totalCost * 0.7) : selectedTower.totalCost}</b>`;
+    if (!isMax && nextStats) {
+        statsHtml += `<br><span style="color:#7a6020;font-size:11px">Upgrade cost: $${nextStats.upgradeCost}`;
+        if (selectedTower.level === MAX_TOWER_LEVEL - 1 && typeDef.evolutionName) {
+            statsHtml += ` \u2014 evolves to ${typeDef.evolutionName}`;
+        }
+        statsHtml += `</span>`;
     }
 
     towerStats.innerHTML = statsHtml;
@@ -2945,6 +3243,12 @@ function updateTowerPanel() {
 // ==========================================
 function gameLoop(timestamp) {
     frameNow = timestamp || performance.now();
+    if (!lastFrameTs) lastFrameTs = frameNow;
+    let deltaFrames = (frameNow - lastFrameTs) / (1000 / 60);
+    lastFrameTs = frameNow;
+    if (!isFinite(deltaFrames) || deltaFrames < 0) deltaFrames = 0;
+    frameDelta = Math.min(deltaFrames, MAX_FRAME_DELTA);
+
     if (gameOver) {
         drawBoard();
         for (let tower of towers) tower.draw();
@@ -2955,6 +3259,8 @@ function gameLoop(timestamp) {
         } else {
             drawOverlayMessage('Game Over', `Score: ${score}`, '#f44336');
         }
+        // Keep the loop alive so Reset/new difficulty works without a page reload.
+        requestAnimationFrame(gameLoop);
         return;
     }
 
@@ -2996,17 +3302,33 @@ function gameLoop(timestamp) {
     // Selected enemy info tooltip
     drawEnemyInfo();
 
-    // Update wave timer
-    if (gameStarted && !gamePaused && waveTimer > 0) {
-        waveTimer -= 1 / 60;
-        if (waveTimer <= 0 && level < 100) {
-            spawnWave();
+    // Update wave timer and scheduled spawns (delta-time, so high-refresh
+    // displays and pauses behave correctly).
+    if (gameStarted && !gamePaused) {
+        updateSpawnQueue();
+        if (waveTimer > 0) {
+            waveTimer -= frameDelta / 60;
+            if (waveTimer <= 0 && level < 100) {
+                spawnWave();
+            }
         }
     }
 
-    // Save game state once when wave clears
-    if (gameStarted && enemies.length === 0 && level < 100 && db && !waveJustCleared) {
-        saveGameState();
+    // Wave clear rewards: interest on banked cash (classic DTD mechanic).
+    // Wait for all scheduled spawns and live enemies so this fires on clear, not at wave start.
+    if (gameStarted && enemies.length === 0 && pendingSpawns === 0 && level < 100 && !waveJustCleared) {
+        const interest = Math.floor(money * 0.03);
+        if (interest > 0) {
+            money += interest;
+            floatingTexts.push({
+                x: canvas.width / 2,
+                y: 60,
+                text: `+$${interest} interest`,
+                color: '#ffcc00',
+                life: 70
+            });
+        }
+        if (db) saveGameState();
         waveJustCleared = true;
     }
 
@@ -3049,7 +3371,7 @@ function gameLoop(timestamp) {
     drawWaveBar();
 
     if (!gameStarted && towers.length === 0) {
-        drawOverlayMessage('-DesktopTowerDefense-', 'Click "Start Game" to begin', '#ece6d0');
+        drawOverlayMessage('-DesktopTowerDefense-', 'Select a difficulty to begin', '#ece6d0');
     }
 
     requestAnimationFrame(gameLoop);
@@ -3156,10 +3478,7 @@ function moveAdjustableTower(newGridX, newGridY) {
     enemies.forEach(e => {
         if (!e.alive || e.isFlying) return;
         if (pathIntersectsPlacement(e.path, e.pathIndex, newGridX, newGridY)) {
-            const cx = Math.floor(e.x / GRID_SIZE);
-            const cy = Math.floor(e.y / GRID_SIZE);
-            e.path = aStar({ x: cx, y: cy }, e.goal);
-            e.pathIndex = 0;
+            repathEnemyFromCurrentCell(e);
         }
     });
     return true;
@@ -3218,10 +3537,7 @@ function handleCanvasAction(x, y, gridX, gridY) {
             enemies.forEach(e => {
                 if (!e.alive || e.isFlying) return;
                 if (pathIntersectsPlacement(e.path, e.pathIndex, gridX, gridY)) {
-                    const cx = Math.floor(e.x / GRID_SIZE);
-                    const cy = Math.floor(e.y / GRID_SIZE);
-                    e.path = aStar({ x: cx, y: cy }, e.goal);
-                    e.pathIndex = 0;
+                    repathEnemyFromCurrentCell(e);
                 }
             });
             selectedTower = null;
@@ -3388,6 +3704,25 @@ resetButton.addEventListener('click', () => {
 
 nextWaveButton.addEventListener('click', () => {
     if (gameStarted) {
+        // Classic DTD: bonus gold for sending the next wave early. The earlier
+        // you send, the more time you save, so pay for the time REMAINING on the
+        // auto-send timer. Never while paused, and require a moment to have
+        // elapsed since the last spawn so the button can't be spam-clicked for
+        // endless full bonuses.
+        if (!gamePaused && level > 1 && waveTimer > 0 &&
+            performance.now() - lastWaveSpawnTs >= EARLY_SEND_MIN_MS) {
+            const bonus = Math.floor(waveTimer);
+            if (bonus > 0) {
+                money += bonus;
+                floatingTexts.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    text: `+$${bonus} early!`,
+                    color: '#ffcc00',
+                    life: 60
+                });
+            }
+        }
         spawnWave();
     }
 });
@@ -3407,11 +3742,82 @@ loadButton.addEventListener('click', () => {
     }
 });
 
-difficultySelect.addEventListener('change', () => {
-    difficulty = difficultySelect.value;
-    WAVE_DELAY = DIFFICULTY_LEVELS[difficulty];
-    if (waveTimer > WAVE_DELAY) waveTimer = WAVE_DELAY;
-});
+function toggleFullscreen() {
+    const docEl = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+        if (docEl.requestFullscreen) {
+            docEl.requestFullscreen();
+        } else if (docEl.webkitRequestFullscreen) {
+            docEl.webkitRequestFullscreen();
+        } else if (docEl.msRequestFullscreen) {
+            docEl.msRequestFullscreen();
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
+    }
+}
+
+function updateFullscreenButton() {
+    if (!fullscreenButton) return;
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+    fullscreenButton.textContent = isFullscreen ? 'Exit Fullscreen' : 'Fullscreen';
+}
+
+if (fullscreenButton) {
+    fullscreenButton.addEventListener('click', toggleFullscreen);
+}
+
+document.addEventListener('fullscreenchange', updateFullscreenButton);
+document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+document.addEventListener('msfullscreenchange', updateFullscreenButton);
+
+if (difficultySelect) {
+    difficultySelect.addEventListener('change', () => {
+        difficulty = difficultySelect.value;
+        WAVE_DELAY = DIFFICULTY_LEVELS[difficulty].delay;
+        if (waveTimer > WAVE_DELAY) waveTimer = WAVE_DELAY;
+    });
+}
+
+function showDifficultyModal() {
+    if (!difficultyModal) return;
+    difficultyModal.classList.add('show');
+    startButton.disabled = true;
+}
+
+function hideDifficultyModal() {
+    if (!difficultyModal) return;
+    difficultyModal.classList.remove('show');
+    startButton.disabled = false;
+}
+
+function selectDifficulty(diff) {
+    if (!DIFFICULTY_LEVELS[diff]) return;
+    difficulty = diff;
+    WAVE_DELAY = DIFFICULTY_LEVELS[diff].delay;
+    // Apply the chosen difficulty's starting economy for a fresh game.
+    // (Never for a loaded save, where gameStarted is already true.)
+    if (!gameStarted) {
+        money = DIFFICULTY_LEVELS[diff].gold;
+        baseHealth = DIFFICULTY_LEVELS[diff].lives;
+    }
+    if (difficultySelect) difficultySelect.value = diff;
+    hideDifficultyModal();
+}
+
+if (difficultyModal) {
+    difficultyModal.querySelectorAll('.difficulty-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectDifficulty(btn.dataset.diff);
+        });
+    });
+}
 
 document.addEventListener('click', (e) => {
     if (!gameOver && e.target !== canvas && e.target !== upgradeButton && e.target !== sellButton &&
@@ -3425,3 +3831,4 @@ document.addEventListener('click', (e) => {
 
 // Start game loop
 gameLoop();
+showDifficultyModal();

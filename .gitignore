@@ -1,0 +1,5 @@
+# Test runner scratch file
+.tests-run.html
+
+# Large Chrome trace dumps
+Trace-*.json
