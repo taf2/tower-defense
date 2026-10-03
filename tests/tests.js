@@ -225,6 +225,35 @@
         tooSlow.length === 0,
         'maxCreep=' + maxCreepSpeed + ' tooSlow=' + tooSlow.join(','));
 
+    // ---- 10c. Kill gold steps up, and a queued creep keeps its own wave ----
+    resetGame();
+    gameStarted = true;
+    gameOver = false;
+    level = 1;
+    var goldWave1 = new Enemy('normal', false, 1.0).goldReward;
+    level = 28;
+    var goldWave28 = new Enemy('normal', false, 1.0).goldReward;
+    var scoreWave28 = new Enemy('normal', false, 1.0).scoreReward;
+    level = 100;
+    var goldWave100 = new Enemy('normal', false, 1.0).goldReward;
+    var darkWave100 = new Enemy('dark', false, 1.0).goldReward;
+    rec('kill gold steps $1 every 20 waves',
+        goldWave1 === 1 && goldWave28 === 2 && goldWave100 === 5 && darkWave100 === 7,
+        'w1=' + goldWave1 + ' w28=' + goldWave28 + ' w100=' + goldWave100 + ' dark100=' + darkWave100);
+    rec('score stays on the type bounty', scoreWave28 === 10, 'score=' + scoreWave28);
+
+    resetGame();
+    gameStarted = true;
+    gameOver = false;
+    level = 1;
+    spawnWave();
+    level = 40;
+    frameDelta = 1000;
+    updateSpawnQueue();
+    rec('queued creep pays the wave that sent it',
+        enemies.length >= 1 && enemies[0].goldReward === 1,
+        'gold=' + (enemies[0] && enemies[0].goldReward));
+
     // ---- 11. No enemies leak into a reset game ----
     resetGame();
     gameStarted = true;

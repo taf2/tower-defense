@@ -284,10 +284,10 @@ const TOWER_TYPES = {
         levels: [
             { damage: 10, range: 90, fireRate: 60, upgradeCost: 0   },
             { damage: 16, range: 105, fireRate: 55, upgradeCost: 5   },
-            { damage: 24, range: 120, fireRate: 50, upgradeCost: 5   },
-            { damage: 35, range: 135, fireRate: 45, upgradeCost: 10  },
-            { damage: 50, range: 150, fireRate: 40, upgradeCost: 20  },
-            { damage: 80, range: 195, fireRate: 35, upgradeCost: 40  },
+            { damage: 24, range: 120, fireRate: 50, upgradeCost: 10  },
+            { damage: 35, range: 135, fireRate: 45, upgradeCost: 20  },
+            { damage: 50, range: 150, fireRate: 40, upgradeCost: 40  },
+            { damage: 80, range: 195, fireRate: 35, upgradeCost: 120 },
         ],
         colors: {
             ring: ['#5a8a3a', '#8ab030', '#b0d040', '#c8e050', '#d8f060', '#ffe880'],
@@ -307,11 +307,11 @@ const TOWER_TYPES = {
         cost: 15,
         levels: [
             { damage: 5,  range: 105, fireRate: 20, upgradeCost: 0   },
-            { damage: 8,  range: 120, fireRate: 18, upgradeCost: 15  },
-            { damage: 12, range: 135, fireRate: 16, upgradeCost: 12  },
-            { damage: 18, range: 150, fireRate: 14, upgradeCost: 23  },
-            { damage: 26, range: 165, fireRate: 12, upgradeCost: 35  },
-            { damage: 40, range: 195, fireRate: 10, upgradeCost: 75  },
+            { damage: 8,  range: 120, fireRate: 18, upgradeCost: 12  },
+            { damage: 12, range: 135, fireRate: 16, upgradeCost: 23  },
+            { damage: 18, range: 150, fireRate: 14, upgradeCost: 35  },
+            { damage: 26, range: 165, fireRate: 12, upgradeCost: 75  },
+            { damage: 40, range: 195, fireRate: 10, upgradeCost: 290 },
         ],
         colors: {
             ring: ['#2a6a9a', '#3080b0', '#40a0d0', '#50b8e0', '#60d0f0', '#90e8ff'],
@@ -331,11 +331,11 @@ const TOWER_TYPES = {
         cost: 20,
         levels: [
             { damage: 8,  range: 135,  fireRate: 90, splashRadius: 30, upgradeCost: 0   },
-            { damage: 14, range: 150, fireRate: 85, splashRadius: 35, upgradeCost: 20  },
-            { damage: 22, range: 165, fireRate: 80, splashRadius: 40, upgradeCost: 15  },
-            { damage: 32, range: 180, fireRate: 75, splashRadius: 45, upgradeCost: 35  },
-            { damage: 45, range: 200, fireRate: 70, splashRadius: 50, upgradeCost: 60  },
-            { damage: 70, range: 240, fireRate: 65, splashRadius: 60, upgradeCost: 110 },
+            { damage: 14, range: 150, fireRate: 85, splashRadius: 35, upgradeCost: 15  },
+            { damage: 22, range: 165, fireRate: 80, splashRadius: 40, upgradeCost: 35  },
+            { damage: 32, range: 180, fireRate: 75, splashRadius: 45, upgradeCost: 60  },
+            { damage: 45, range: 200, fireRate: 70, splashRadius: 50, upgradeCost: 110 },
+            { damage: 70, range: 240, fireRate: 65, splashRadius: 60, upgradeCost: 160 },
         ],
         colors: {
             ring: ['#aa5030', '#cc6030', '#ee7040', '#ff8850', '#ffa060', '#ffd080'],
@@ -355,11 +355,11 @@ const TOWER_TYPES = {
         cost: 50,
         levels: [
             { damage: 20, range: 90, fireRate: 40, targets: 4, upgradeCost: 0   },
-            { damage: 28, range: 105, fireRate: 36, targets: 4, upgradeCost: 50  },
-            { damage: 38, range: 120, fireRate: 32, targets: 5, upgradeCost: 30  },
-            { damage: 50, range: 135, fireRate: 28, targets: 5, upgradeCost: 50  },
-            { damage: 65, range: 150, fireRate: 24, targets: 6, upgradeCost: 75  },
-            { damage: 90, range: 180, fireRate: 20, targets: 7, upgradeCost: 125 },
+            { damage: 28, range: 105, fireRate: 36, targets: 4, upgradeCost: 30  },
+            { damage: 38, range: 120, fireRate: 32, targets: 5, upgradeCost: 50  },
+            { damage: 50, range: 135, fireRate: 28, targets: 5, upgradeCost: 75  },
+            { damage: 65, range: 150, fireRate: 24, targets: 6, upgradeCost: 125 },
+            { damage: 90, range: 180, fireRate: 20, targets: 7, upgradeCost: 310 },
         ],
         colors: {
             ring: ['#8a5aa0', '#a070b8', '#b888d0', '#c898e0', '#d8a8f0', '#f0d0ff'],
@@ -424,7 +424,12 @@ const TOWER_TYPES = {
     },
 };
 
-// Enemy type definitions (economy tuned to match cheap original tower prices)
+// Enemy type definitions (economy tuned to match cheap original tower prices).
+// Kill gold adds $1 to that base every GOLD_BONUS_EVERY_WAVES waves. A flat
+// bounty left a wave-28 creep (about 5.5× wave-1 HP) paying $1, but +12% per
+// wave overshot it: late group waves paid hundreds and a full clear earned
+// about 4× the income these tower prices were tuned for.
+const GOLD_BONUS_EVERY_WAVES = 20;
 const ENEMY_TYPES = {
     normal:  { name: 'Normal',  hpMult: 1.0, speedMult: 1.0, gold: 1,  score: 10, color: { main: '#3a3a4a', dark: '#1a1a2a', accent: '#5a5a70' } },
     group:   { name: 'Group',   hpMult: 0.5, speedMult: 1.0, gold: 1,  score: 5,  color: { main: '#6a5040', dark: '#3a2820', accent: '#8a7060' }, sizeMult: 0.7 },
@@ -2193,7 +2198,7 @@ function drawHoverPreview() {
 // Enemy class
 // ==========================================
 class Enemy {
-    constructor(type = 'normal', isBoss = false, diffHpMult = 1.0) {
+    constructor(type = 'normal', isBoss = false, diffHpMult = 1.0, rewardLevel = level) {
         this.type = type;
         const typeDef = ENEMY_TYPES[type];
         this.alive = true;
@@ -2224,9 +2229,16 @@ class Enemy {
         const baseSize = isBoss ? 40 : 20;
         this.size = typeDef.sizeMult ? Math.floor(baseSize * typeDef.sizeMult) : baseSize;
 
-        // Rewards
-        this.goldReward = isBoss ? (10 + level * 2) : typeDef.gold;
-        this.scoreReward = isBoss ? (100 + level * 10) : typeDef.score;
+        // Rewards. Boss gold already grows with the wave. Regular bounties step
+        // up by $1 every GOLD_BONUS_EVERY_WAVES waves (wave 1 normal = $1,
+        // wave 28 = $2, wave 100 = $5). rewardLevel is the wave that sent this
+        // creep, so early-sending later waves cannot raise this one's payout.
+        const paidLevel = Math.max(1, rewardLevel);
+        const goldBonus = Math.floor((paidLevel - 1) / GOLD_BONUS_EVERY_WAVES);
+        this.goldReward = isBoss
+            ? (10 + paidLevel * 2)
+            : typeDef.gold + goldBonus;
+        this.scoreReward = isBoss ? (100 + paidLevel * 10) : typeDef.score;
 
         this.leakDamage = isBoss ? 5 : 1;
         this.angle = 0;
@@ -3040,7 +3052,8 @@ function spawnWave() {
                 delay: i * spawnDelayFrames,
                 type: waveType,
                 isBoss: false,
-                hpMult
+                hpMult,
+                waveLevel: level
             });
         }
     }
@@ -3058,7 +3071,12 @@ function updateSpawnQueue() {
             spawnQueue.splice(i, 1);
             pendingSpawns = Math.max(0, pendingSpawns - 1);
             if (!gameOver) {
-                enemies.push(new Enemy(pendingSpawn.type, pendingSpawn.isBoss, pendingSpawn.hpMult));
+                enemies.push(new Enemy(
+                    pendingSpawn.type,
+                    pendingSpawn.isBoss,
+                    pendingSpawn.hpMult,
+                    pendingSpawn.waveLevel
+                ));
             }
         }
     }
@@ -3149,6 +3167,47 @@ function showTowerPreview(type) {
         statsHtml += `<br><span style="color:#7a6020;font-size:11px">Evolves to ${typeDef.evolutionName} at Lv${MAX_TOWER_LEVEL}</span>`;
     }
 
+    // Full upgrade path so players can plan before placing. Compact table:
+    // one row per level showing the cost to reach it and the key stats.
+    statsHtml += `<div style="margin-top:6px;border-top:1px dashed #c8b860;padding-top:4px">` +
+        `<span style="color:#7a6020;font-size:10px;font-weight:bold">UPGRADE PATH</span>` +
+        `<table style="width:100%;border-collapse:collapse;font-size:10px;color:#5a5230;margin-top:2px">` +
+        `<tr style="color:#7a6020"><td style="padding:1px 2px">Lv</td>` +
+        `<td style="padding:1px 2px;text-align:right">Cost</td>` +
+        `<td style="padding:1px 2px;text-align:right">Dmg</td>` +
+        `<td style="padding:1px 2px;text-align:right">Rng</td>` +
+        `<td style="padding:1px 2px;text-align:right">Rate</td></tr>`;
+    typeDef.levels.forEach((lvl, i) => {
+        const isFirst = i === 0;
+        const costTxt = isFirst ? `$${typeDef.cost}` : `$${lvl.upgradeCost}`;
+        const rowStyle = isFirst ? 'color:#8a6a0a;font-weight:bold' : '';
+        statsHtml += `<tr style="${rowStyle}">` +
+            `<td style="padding:1px 2px">${i + 1}</td>` +
+            `<td style="padding:1px 2px;text-align:right">${costTxt}</td>` +
+            `<td style="padding:1px 2px;text-align:right">${lvl.damage}</td>` +
+            `<td style="padding:1px 2px;text-align:right">${lvl.range}</td>` +
+            `<td style="padding:1px 2px;text-align:right">${lvl.fireRate}</td></tr>`;
+    });
+    statsHtml += `</table>`;
+    // Flag the unique special stats that change across levels.
+    const notes = [];
+    if (type === 'frost') {
+        notes.push(`Slow ${Math.round(typeDef.levels[0].slowFactor * 100)}% \u2192 ${Math.round(typeDef.levels[MAX_TOWER_LEVEL - 1].slowFactor * 100)}%`);
+    }
+    if (type === 'swarm') {
+        notes.push(`Targets ${typeDef.levels[0].targets} \u2192 ${typeDef.levels[MAX_TOWER_LEVEL - 1].targets}`);
+    }
+    if (type === 'bash') {
+        notes.push(`Stun ${Math.round(typeDef.levels[0].stunChance * 100)}% \u2192 ${Math.round(typeDef.levels[MAX_TOWER_LEVEL - 1].stunChance * 100)}%`);
+    }
+    if (type === 'dart') {
+        notes.push(`Splash ${typeDef.levels[0].splashRadius} \u2192 ${typeDef.levels[MAX_TOWER_LEVEL - 1].splashRadius}px`);
+    }
+    if (notes.length) {
+        statsHtml += `<div style="font-size:10px;color:#6a6255;margin-top:2px">${notes.join(' &middot; ')}</div>`;
+    }
+    statsHtml += `</div>`;
+
     towerStats.innerHTML = statsHtml;
 }
 
@@ -3178,7 +3237,7 @@ function updateTowerPanel() {
     // behaviour). Rows with no change stay single-valued to reduce noise.
     function statRow(label, cur, next, suffix = '', lowerIsBetter = false) {
         const curTxt = `${cur}${suffix}`;
-        if (next == null || next === cur) return `${label}: <b>${curTxt}</b>`;
+        if (next == null || next === cur) return `<div class="statRow">${label}: <b>${curTxt}</b></div>`;
         const up = typeof next === 'number' && typeof cur === 'number' && next > cur;
         const down = typeof next === 'number' && typeof cur === 'number' && next < cur;
         const arrow = up ? '\u25B2' : (down ? '\u25BC' : '\u2192');
@@ -3187,35 +3246,36 @@ function updateTowerPanel() {
         const improved = lowerIsBetter ? down : up;
         const worsened = lowerIsBetter ? up : down;
         const color = improved ? '#2a8a2a' : (worsened ? '#aa4430' : '#6a6255');
-        return `${label}: <b>${curTxt}</b> <span style="color:${color};font-weight:bold">${arrow} ${next}${suffix}</span>`;
+        return `<div class="statRow">${label}: <b>${curTxt}</b> <span style="color:${color};font-weight:bold">${arrow} ${next}${suffix}</span></div>`;
     }
 
-    let statsHtml = `<span style="color:#4a4520">Level: ${selectedTower.level}/${MAX_TOWER_LEVEL}${isMax ? ' (MAX)' : ''}</span><br>`;
-    statsHtml += statRow('Damage', selectedTower.damage, nextStats ? nextStats.damage : null) + '<br>';
-    statsHtml += statRow('Range', selectedTower.range, nextStats ? nextStats.range : null) + '<br>';
-    statsHtml += statRow('Fire Rate', selectedTower.fireRate, nextStats ? nextStats.fireRate : null, ' frames', true) + '<br>';
+    let statsHtml = `<div class="statRow" style="color:#4a4520">Level: ${selectedTower.level}/${MAX_TOWER_LEVEL}${isMax ? ' (MAX)' : ''}</div>`;
+    statsHtml += statRow('Damage', selectedTower.damage, nextStats ? nextStats.damage : null);
+    statsHtml += statRow('Range', selectedTower.range, nextStats ? nextStats.range : null);
+    // "Rate" (not "Fire Rate") keeps the row within the 220px sidebar.
+    statsHtml += statRow('Rate', selectedTower.fireRate, nextStats ? nextStats.fireRate : null, 'f', true);
     if (selectedTower.type === 'dart') {
-        statsHtml += statRow('Splash', currentSplash, nextStats ? (nextStats.splashRadius || typeDef.splashRadius) : null, 'px') + '<br>';
+        statsHtml += statRow('Splash', currentSplash, nextStats ? (nextStats.splashRadius || typeDef.splashRadius) : null, 'px');
     }
     if (selectedTower.type === 'frost') {
-        statsHtml += statRow('Slow', Math.round(lvlStats.slowFactor * 100), nextStats ? Math.round(nextStats.slowFactor * 100) : null, '% (area)') + '<br>';
-        statsHtml += statRow('Slow Time', (lvlStats.slowDuration / 60).toFixed(1), nextStats ? (nextStats.slowDuration / 60).toFixed(1) : null, 's') + '<br>';
+        statsHtml += statRow('Slow', Math.round(lvlStats.slowFactor * 100), nextStats ? Math.round(nextStats.slowFactor * 100) : null, '%');
+        statsHtml += statRow('Slow Time', (lvlStats.slowDuration / 60).toFixed(1), nextStats ? (nextStats.slowDuration / 60).toFixed(1) : null, 's');
     }
     if (selectedTower.type === 'swarm') {
-        statsHtml += statRow('Targets', lvlStats.targets, nextStats ? nextStats.targets : null) + '<br>';
+        statsHtml += statRow('Targets', lvlStats.targets, nextStats ? nextStats.targets : null);
     }
     if (selectedTower.type === 'bash') {
-        statsHtml += statRow('Stun', Math.round(lvlStats.stunChance * 100), nextStats ? Math.round(nextStats.stunChance * 100) : null, '%') + '<br>';
-        statsHtml += statRow('Stun Time', (lvlStats.stunDuration / 60).toFixed(1), nextStats ? (nextStats.stunDuration / 60).toFixed(1) : null, 's') + '<br>';
+        statsHtml += statRow('Stun', Math.round(lvlStats.stunChance * 100), nextStats ? Math.round(nextStats.stunChance * 100) : null, '%');
+        statsHtml += statRow('Stun Time', (lvlStats.stunDuration / 60).toFixed(1), nextStats ? (nextStats.stunDuration / 60).toFixed(1) : null, 's');
     }
-    statsHtml += `Total Cost: <b>$${selectedTower.totalCost}</b><br>`;
-    statsHtml += `Sell Value: <b>$${gameStarted ? Math.floor(selectedTower.totalCost * 0.7) : selectedTower.totalCost}</b>`;
+    statsHtml += `<div class="statRow">Total Cost: <b>$${selectedTower.totalCost}</b></div>`;
+    statsHtml += `<div class="statRow">Sell Value: <b>$${gameStarted ? Math.floor(selectedTower.totalCost * 0.7) : selectedTower.totalCost}</b></div>`;
     if (!isMax && nextStats) {
-        statsHtml += `<br><span style="color:#7a6020;font-size:11px">Upgrade cost: $${nextStats.upgradeCost}`;
+        statsHtml += `<div class="upgradeNote" style="color:#7a6020">Upgrade cost: $${nextStats.upgradeCost}`;
         if (selectedTower.level === MAX_TOWER_LEVEL - 1 && typeDef.evolutionName) {
             statsHtml += ` \u2014 evolves to ${typeDef.evolutionName}`;
         }
-        statsHtml += `</span>`;
+        statsHtml += `</div>`;
     }
 
     towerStats.innerHTML = statsHtml;

@@ -38,10 +38,14 @@
             background: #f4f1e8;
         }
 
-        /* Sidebar */
+        /* Sidebar.
+           Widened to two columns so the tower panel never needs an inner
+           scrollbar (a scrollbar used to hide the Upgrade button, which
+           made upgrading slow). Left column = stats + selector + panel,
+           right column = action buttons + controls. */
         #sidebar {
             position: relative;
-            width: 220px;
+            width: 440px;
             height: 600px;
             background: #f4f1e8;
             border: 3px solid #5a5245;
@@ -49,9 +53,27 @@
             border-radius: 0 6px 6px 0;
             box-shadow: 4px 4px 20px rgba(0,0,0,0.4);
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             gap: 0;
             overflow: visible;
+        }
+        #sidebarColLeft,
+        #sidebarColRight {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            min-height: 0;
+        }
+        #sidebarColLeft {
+            width: 220px;
+            flex: 0 0 220px;
+            border-right: 2px dashed #8a8275;
+        }
+        #sidebarColRight {
+            flex: 1 1 auto;
+            padding: 8px;
+            gap: 0;
+            overflow-y: auto;
         }
 
         /* Sidebar stats */
@@ -88,7 +110,11 @@
         .stat-score .stat-value { color: #aa4430; }
         .stat-wave .stat-value { color: #2a6a9a; }
 
-        /* Tower panel */
+        /* Tower panel.
+           Lives in the left column between the selector and the column
+           bottom. With the two-column sidebar there is enough vertical
+           room for every stat row, so the panel sizes naturally — no inner
+           scrollbar (which would hide the Upgrade button). */
         #towerPanel {
             padding: 10px;
             margin: 8px;
@@ -98,6 +124,9 @@
             box-shadow: 2px 2px 6px rgba(0,0,0,0.15);
             display: none;
             transform: rotate(-0.5deg);
+            flex: 0 0 auto;
+            overflow: visible;
+            box-sizing: border-box;
         }
         #towerPanelHeader {
             display: flex;
@@ -115,9 +144,15 @@
         }
         #towerStats {
             font-size: 12px;
-            line-height: 1.4;
+            line-height: 1.45;
             color: #5a5230;
+            word-break: break-word;
         }
+        /* Keep each stat on a single line so the panel height is predictable
+           and rows don't wrap mid-comparison ("40 frames ▼ 35 frames"). */
+        .statRow { white-space: nowrap; }
+        .statRow b { font-weight: bold; }
+        .upgradeNote { display: block; white-space: normal; margin-top: 3px; }
         #towerPanel button {
             padding: 5px 7px;
             font-size: 11px;
@@ -176,9 +211,10 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 6px;
-            padding: 10px;
-            border-top: 2px dashed #8a8275;
-            margin-top: auto;
+            padding: 0;
+            border-top: none;
+            margin-top: 0;
+            align-content: start;
         }
         button, select {
             margin: 0;
@@ -247,18 +283,18 @@
             justify-content: center;
         }
         :fullscreen #gameContainer {
-            width: min(95vw, calc(95vh * 1020 / 600));
-            height: min(95vh, calc(95vw * 600 / 1020));
+            width: min(95vw, calc(95vh * 1240 / 600));
+            height: min(95vh, calc(95vw * 600 / 1240));
             flex-direction: row;
             align-items: stretch;
         }
         :fullscreen canvas {
-            width: calc(100% * 800 / 1020);
+            width: calc(100% * 800 / 1240);
             height: 100%;
             border-radius: 6px 0 0 6px;
         }
         :fullscreen #sidebar {
-            width: calc(100% * 220 / 1020);
+            width: calc(100% * 440 / 1240);
             height: 100%;
             border-radius: 0 6px 6px 0;
         }
@@ -331,8 +367,10 @@
             margin-top: 2px;
         }
 
-        /* Mobile responsive */
-        @media (max-width: 1040px) {
+        /* Mobile / narrow responsive.
+           Breakpoint raised to 1280px because the two-column sidebar is
+           440px wide (a 800px canvas + 440px sidebar needs ~1280px). */
+        @media (max-width: 1280px) {
             h1 { font-size: 18px; margin-bottom: 6px; letter-spacing: 1px; }
             #gameContainer {
                 flex-direction: column;
@@ -351,6 +389,16 @@
                 border-left: 2px solid #5a5245;
                 border-top: 2px dashed #8a8275;
                 flex-direction: column;
+            }
+            #sidebarColLeft,
+            #sidebarColRight {
+                width: 100%;
+                flex: 1 1 auto;
+                border-right: none;
+                overflow: visible;
+            }
+            #sidebarColLeft {
+                border-bottom: 2px dashed #8a8275;
             }
             #sidebarStats {
                 grid-template-columns: repeat(4, 1fr);
@@ -420,6 +468,7 @@
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="sidebar">
+            <div id="sidebarColLeft">
             <div id="sidebarStats">
                 <div class="stat-item stat-lives">
                     <span class="stat-label">Lives</span>
@@ -472,6 +521,8 @@
                 <p id="towerStats"></p>
                 <button id="upgradeButton">Upgrade</button>
             </div>
+            </div>
+            <div id="sidebarColRight">
             <div id="controls">
                 <button id="startButton">Start Game</button>
                 <button id="resetButton">Reset</button>
@@ -486,6 +537,7 @@
                     <option value="challenge">Challenge</option>
                     <option value="fun">Fun</option>
                 </select>
+            </div>
             </div>
         </div>
     </div>
