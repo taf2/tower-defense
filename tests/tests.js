@@ -266,6 +266,33 @@
     }
     rec('no stale enemies after reset', enemies.length === 0, 'enemies=' + enemies.length);
 
+    // ---- 12. Fullscreen-sized canvas rasterizes in device pixels ----
+    canvas.style.width = '1600px';
+    canvas.style.height = '1200px';
+    syncCanvasResolution();
+    rec('backing store tracks display size',
+        canvas.width > 1200 && canvas.height > 900,
+        canvas.width + 'x' + canvas.height);
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(80, 80, 40, 40);
+    var scaleX = canvas.width / 800;
+    var scaleY = canvas.height / 600;
+    var px = Math.min(canvas.width - 1, Math.floor(100 * scaleX));
+    var py = Math.min(canvas.height - 1, Math.floor(100 * scaleY));
+    var mid = ctx.getImageData(px, py, 1, 1).data;
+    rec('strokes rasterize at display resolution',
+        mid[0] > 200 && mid[1] < 40 && mid[2] < 40,
+        'rgba=' + mid[0] + ',' + mid[1] + ',' + mid[2] + ' at ' + px + ',' + py);
+    var low = ctx.getImageData(10, 10, 1, 1).data;
+    rec('drawing is not left in the low-res corner',
+        low[0] < 40,
+        'rgba=' + low[0] + ',' + low[1] + ',' + low[2]);
+    var box = canvasContentBox();
+    var center = canvasCoords(box.left + box.width / 2, box.top + box.height / 2);
+    rec('pointer maps to logical center when scaled',
+        Math.abs(center.x - 400) < 1 && Math.abs(center.y - 300) < 1,
+        center.x.toFixed(2) + ',' + center.y.toFixed(2));
+
     // ---- flush results ----
     var pre = document.createElement('pre');
     pre.id = 'testResults';

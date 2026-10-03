@@ -270,9 +270,82 @@ document.addEventListener('keydown', unlockAudio, { once: true });
 const GRID_SIZE = 20;                // halved from 40 — pathfinding cell size
 const TOWER_PX = GRID_SIZE * 2;      // 40px — visual tower size (same as old GRID_SIZE)
 const BORDER_CELLS = 2;              // border thickness in grid cells (2*20 = 40px visual)
-const COLS = Math.floor(canvas.width / GRID_SIZE);   // 40 (was 20)
-const ROWS = Math.floor(canvas.height / GRID_SIZE);  // 30 (was 15)
+const GAME_W = 800;                   // logical board size; the bitmap can be larger
+const GAME_H = 600;
+const COLS = Math.floor(GAME_W / GRID_SIZE);   // 40 (was 20)
+const ROWS = Math.floor(GAME_H / GRID_SIZE);   // 30 (was 15)
 const MAX_TOWER_LEVEL = 6;
+// Backing-store scale. 1 means one logical pixel per bitmap pixel.
+let renderScaleX = 1;
+let renderScaleY = 1;
+
+function canvasContentBox() {
+    const rect = canvas.getBoundingClientRect();
+    const style = getComputedStyle(canvas);
+    const bl = parseFloat(style.borderLeftWidth) || 0;
+    const bt = parseFloat(style.borderTopWidth) || 0;
+    const br = parseFloat(style.borderRightWidth) || 0;
+    const bb = parseFloat(style.borderBottomWidth) || 0;
+    return {
+        left: rect.left + bl,
+        top: rect.top + bt,
+        width: Math.max(0, rect.width - bl - br),
+        height: Math.max(0, rect.height - bt - bb)
+    };
+}
+
+function invalidateResolutionCaches() {
+    towerCoreSpriteCache.clear();
+    enemyCoreSpriteCache.clear();
+    deskBgCanvas = null;
+    boardBaseCanvas = null;
+    boardArrowsCanvas = null;
+    boardWallsCanvas = null;
+    boardWallsDirty = true;
+}
+
+// Match the bitmap to the canvas on screen (CSS pixels × devicePixelRatio)
+// so fullscreen and HiDPI displays rasterize vectors instead of stretching
+// an 800×600 image. Drawing code stays in GAME_W × GAME_H space.
+function syncCanvasResolution() {
+    const box = canvasContentBox();
+    if (box.width >= 2 && box.height >= 2) {
+        const dpr = window.devicePixelRatio || 1;
+        let bw = Math.max(1, Math.round(box.width * dpr));
+        let bh = Math.max(1, Math.round(box.height * dpr));
+        const MAX_EDGE = 4096;
+        if (bw > MAX_EDGE || bh > MAX_EDGE) {
+            const cap = MAX_EDGE / Math.max(bw, bh);
+            bw = Math.max(1, Math.round(bw * cap));
+            bh = Math.max(1, Math.round(bh * cap));
+        }
+        if (Math.abs(canvas.width - bw) > 1 || Math.abs(canvas.height - bh) > 1) {
+            canvas.width = bw;
+            canvas.height = bh;
+            invalidateResolutionCaches();
+        }
+    }
+    renderScaleX = canvas.width / GAME_W;
+    renderScaleY = canvas.height / GAME_H;
+    ctx.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+}
+
+function createLogicalLayer() {
+    const layer = document.createElement('canvas');
+    layer.width = Math.max(1, canvas.width);
+    layer.height = Math.max(1, canvas.height);
+    const bg = layer.getContext('2d');
+    bg.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
+    bg.imageSmoothingEnabled = true;
+    bg.imageSmoothingQuality = 'high';
+    return { layer, bg };
+}
+
+function spritePixelScale() {
+    return Math.max(renderScaleX, renderScaleY, 1);
+}
 
 // Tower type definitions (matched to original Desktop Tower Defense base stats)
 const TOWER_TYPES = {
@@ -527,12 +600,12 @@ const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
 
 // Translate client coordinates to canvas coordinates (handles CSS scaling)
 function canvasCoords(clientX, clientY) {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const box = canvasContentBox();
+    const width = box.width || GAME_W;
+    const height = box.height || GAME_H;
     return {
-        x: (clientX - rect.left) * scaleX,
-        y: (clientY - rect.top) * scaleY
+        x: (clientX - box.left) * (GAME_W / width),
+        y: (clientY - box.top) * (GAME_H / height)
     };
 }
 
@@ -1305,7 +1378,8 @@ function drawTowerCoreShape(drawCtx, type, level, angle, cx, cy, gs, color, dark
 }
 
 function getTowerCoreSprite(type, level) {
-    const key = `${type}|${level}`;
+    const pixelScale = spritePixelScale();
+    const key = `${type}|${level}|${Math.round(pixelScale * 100)}`;
     if (towerCoreSpriteCache.has(key)) return towerCoreSpriteCache.get(key);
 
     const typeDef = TOWER_TYPES[type];
@@ -1315,26 +1389,33 @@ function getTowerCoreSprite(type, level) {
     const center = size / 2;
 
     const sprite = document.createElement('canvas');
-    sprite.width = size;
-    sprite.height = size;
+    sprite.width = Math.max(1, Math.ceil(size * pixelScale));
+    sprite.height = sprite.width;
     const sctx = sprite.getContext('2d');
+    sctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0);
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = 'high';
     drawTowerCoreShape(sctx, type, level, 0, center, center, TOWER_PX, color, dark);
-    const result = { canvas: sprite, center };
+    const result = { canvas: sprite, center, drawSize: size };
     towerCoreSpriteCache.set(key, result);
     return result;
 }
 
 function buildEnemyCoreSprite(type, isBoss, isChild, size) {
-    const key = `${type}|${isBoss ? 1 : 0}|${isChild ? 1 : 0}|${size}`;
+    const pixelScale = spritePixelScale();
+    const key = `${type}|${isBoss ? 1 : 0}|${isChild ? 1 : 0}|${size}|${Math.round(pixelScale * 100)}`;
     if (enemyCoreSpriteCache.has(key)) return enemyCoreSpriteCache.get(key);
 
     const r = size / 2;
     const canvasSize = Math.ceil(size * 3.0);
     const center = canvasSize / 2;
     const sprite = document.createElement('canvas');
-    sprite.width = canvasSize;
-    sprite.height = canvasSize;
+    sprite.width = Math.max(1, Math.ceil(canvasSize * pixelScale));
+    sprite.height = sprite.width;
     const sctx = sprite.getContext('2d');
+    sctx.setTransform(pixelScale, 0, 0, pixelScale, 0, 0);
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = 'high';
     const typeDef = ENEMY_TYPES[type];
 
     let mainColor, darkColor, accentColor;
@@ -1509,7 +1590,7 @@ function buildEnemyCoreSprite(type, isBoss, isChild, size) {
         }
     }
 
-    const spriteObj = { canvas: sprite, center };
+    const spriteObj = { canvas: sprite, center, drawSize: canvasSize };
     enemyCoreSpriteCache.set(key, spriteObj);
     return spriteObj;
 }
@@ -1526,32 +1607,31 @@ function markBoardVisualDirty() {
 }
 
 function createDeskBackground() {
-    deskBgCanvas = document.createElement('canvas');
-    deskBgCanvas.width = canvas.width;
-    deskBgCanvas.height = canvas.height;
-    const bg = deskBgCanvas.getContext('2d');
+    const layer = createLogicalLayer();
+    deskBgCanvas = layer.layer;
+    const bg = layer.bg;
 
     // Wooden desk base with subtle grain
-    const deskGrad = bg.createLinearGradient(0, 0, canvas.width, canvas.height);
+    const deskGrad = bg.createLinearGradient(0, 0, GAME_W, GAME_H);
     deskGrad.addColorStop(0, '#8a7a58');
     deskGrad.addColorStop(0.25, '#9a8a66');
     deskGrad.addColorStop(0.5, '#8a7a56');
     deskGrad.addColorStop(0.75, '#7a6a48');
     deskGrad.addColorStop(1, '#6a5e3a');
     bg.fillStyle = deskGrad;
-    bg.fillRect(0, 0, canvas.width, canvas.height);
+    bg.fillRect(0, 0, GAME_W, GAME_H);
 
     // Wood grain scribbles
     bg.strokeStyle = 'rgba(0, 0, 0, 0.04)';
     bg.lineWidth = 1;
-    for (let i = 0; i < canvas.height; i += 3) {
+    for (let i = 0; i < GAME_H; i += 3) {
         bg.beginPath();
         bg.moveTo(0, i + 0.5);
         const y = i + 0.5;
-        for (let x = 0; x < canvas.width; x += 40) {
+        for (let x = 0; x < GAME_W; x += 40) {
             bg.lineTo(x + 20, y + (Math.random() - 0.5) * 2);
         }
-        bg.lineTo(canvas.width, y);
+        bg.lineTo(GAME_W, y);
         bg.stroke();
     }
 
@@ -1572,8 +1652,8 @@ function createDeskBackground() {
     bg.strokeStyle = 'rgba(60, 60, 60, 0.08)';
     bg.lineWidth = 1;
     for (let i = 0; i < 8; i++) {
-        const x1 = Math.random() * canvas.width;
-        const y1 = Math.random() * canvas.height;
+        const x1 = Math.random() * GAME_W;
+        const y1 = Math.random() * GAME_H;
         const len = 20 + Math.random() * 40;
         const angle = (Math.random() - 0.5) * 0.5;
         bg.beginPath();
@@ -1609,10 +1689,9 @@ function createDeskBackground() {
 }
 
 function createBoardBaseLayer() {
-    boardBaseCanvas = document.createElement('canvas');
-    boardBaseCanvas.width = canvas.width;
-    boardBaseCanvas.height = canvas.height;
-    const bg = boardBaseCanvas.getContext('2d');
+    const layer = createLogicalLayer();
+    boardBaseCanvas = layer.layer;
+    const bg = layer.bg;
 
     const paperX = BORDER_CELLS * GRID_SIZE;
     const paperY = BORDER_CELLS * GRID_SIZE;
@@ -1691,10 +1770,9 @@ function createBoardBaseLayer() {
 }
 
 function createBoardArrowsLayer() {
-    boardArrowsCanvas = document.createElement('canvas');
-    boardArrowsCanvas.width = canvas.width;
-    boardArrowsCanvas.height = canvas.height;
-    const bg = boardArrowsCanvas.getContext('2d');
+    const layer = createLogicalLayer();
+    boardArrowsCanvas = layer.layer;
+    const bg = layer.bg;
 
     const topOpenW = TOP_OPENING_W * GRID_SIZE;
     const sideOpenH = SIDE_OPENING_H * GRID_SIZE;
@@ -1713,13 +1791,13 @@ function createBoardArrowsLayer() {
 
 function rebuildBoardWallsLayer() {
     if (!boardWallsCanvas) {
-        boardWallsCanvas = document.createElement('canvas');
-        boardWallsCanvas.width = canvas.width;
-        boardWallsCanvas.height = canvas.height;
+        const layer = createLogicalLayer();
+        boardWallsCanvas = layer.layer;
     }
 
     const bg = boardWallsCanvas.getContext('2d');
-    bg.clearRect(0, 0, boardWallsCanvas.width, boardWallsCanvas.height);
+    bg.setTransform(renderScaleX, 0, 0, renderScaleY, 0, 0);
+    bg.clearRect(0, 0, GAME_W, GAME_H);
 
     const towerMask = new Uint8Array(ROWS * COLS);
     for (let i = 0; i < towers.length; i++) {
@@ -1776,10 +1854,10 @@ function drawBoard() {
     if (!boardArrowsCanvas) createBoardArrowsLayer();
     if (!boardWallsCanvas || boardWallsDirty) rebuildBoardWallsLayer();
 
-    ctx.drawImage(deskBgCanvas, 0, 0);
-    ctx.drawImage(boardBaseCanvas, 0, 0);
-    ctx.drawImage(boardWallsCanvas, 0, 0);
-    ctx.drawImage(boardArrowsCanvas, 0, 0);
+    ctx.drawImage(deskBgCanvas, 0, 0, GAME_W, GAME_H);
+    ctx.drawImage(boardBaseCanvas, 0, 0, GAME_W, GAME_H);
+    ctx.drawImage(boardWallsCanvas, 0, 0, GAME_W, GAME_H);
+    ctx.drawImage(boardArrowsCanvas, 0, 0, GAME_W, GAME_H);
 
     // (hover highlight drawn later in render order via drawHoverPreview)
 }
@@ -1787,9 +1865,9 @@ function drawBoard() {
 // Draw the HUD
 function drawHUD() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, canvas.width, 26);
+    ctx.fillRect(0, 0, GAME_W, 26);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.fillRect(0, 26, canvas.width, 1);
+    ctx.fillRect(0, 26, GAME_W, 1);
 
     ctx.font = 'bold 14px Arial, sans-serif';
     ctx.textBaseline = 'middle';
@@ -1806,7 +1884,7 @@ function drawHUD() {
     if (gamePaused && gameStarted) {
         ctx.fillStyle = '#ffff00';
         ctx.textAlign = 'right';
-        ctx.fillText('PAUSED', canvas.width - 12, y);
+        ctx.fillText('PAUSED', GAME_W - 12, y);
         ctx.textAlign = 'left';
     }
 
@@ -1834,12 +1912,12 @@ function updateSidebarStats() {
 // Draw overlay message
 function drawOverlayMessage(text, subText, color) {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, GAME_W, GAME_H);
 
     const boxW = 340;
     const boxH = subText ? 100 : 70;
-    const boxX = (canvas.width - boxW) / 2;
-    const boxY = (canvas.height - boxH) / 2;
+    const boxX = (GAME_W - boxW) / 2;
+    const boxY = (GAME_H - boxH) / 2;
 
     ctx.fillStyle = 'rgba(20, 20, 30, 0.92)';
     drawRoundedRect(boxX, boxY, boxW, boxH, 8);
@@ -1852,12 +1930,12 @@ function drawOverlayMessage(text, subText, color) {
     ctx.fillStyle = color;
     ctx.font = 'bold 30px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(text, canvas.width / 2, boxY + 38);
+    ctx.fillText(text, GAME_W / 2, boxY + 38);
 
     if (subText) {
         ctx.fillStyle = '#aaa';
         ctx.font = '15px Arial, sans-serif';
-        ctx.fillText(subText, canvas.width / 2, boxY + 70);
+        ctx.fillText(subText, GAME_W / 2, boxY + 70);
     }
 
     ctx.textAlign = 'start';
@@ -1893,7 +1971,7 @@ function drawEnemyInfo() {
     let by = e.y - e.size / 2 - boxH - 14;
     // Keep on screen
     if (bx < 2) bx = 2;
-    if (bx + boxW > canvas.width - 2) bx = canvas.width - boxW - 2;
+    if (bx + boxW > GAME_W - 2) bx = GAME_W - boxW - 2;
     if (by < 28) by = e.y + e.size / 2 + 8;
 
     ctx.fillStyle = 'rgba(10, 10, 20, 0.9)';
@@ -1948,13 +2026,13 @@ function drawFloatingTexts() {
 function drawWaveBar() {
     if (!gameStarted) return;
     const barH = 32;
-    const barY = canvas.height - barH;
+    const barY = GAME_H - barH;
 
     // Background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(0, barY, canvas.width, barH);
+    ctx.fillRect(0, barY, GAME_W, barH);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-    ctx.fillRect(0, barY, canvas.width, 1);
+    ctx.fillRect(0, barY, GAME_W, 1);
 
     const cellW = 58;
     const cellGap = 3;
@@ -1972,16 +2050,16 @@ function drawWaveBar() {
 
     // Fixed "now" slot. The next wave slides into it as the timer runs out, so
     // the incoming level crosses the cursor exactly when it is due to start.
-    const anchorX = canvas.width * 0.18;
+    const anchorX = GAME_W * 0.18;
     const scrollOffset = anchorX + (1 - waveProgress) * cellStep - (nextWave - 1) * cellStep;
     const visiblePad = 20;
     const minWave = Math.max(1, Math.ceil(((-visiblePad - scrollOffset - cellW) / cellStep) + 1));
-    const maxWave = Math.min(MAX_WAVES, Math.floor(((canvas.width + visiblePad - scrollOffset) / cellStep) + 1));
+    const maxWave = Math.min(MAX_WAVES, Math.floor(((GAME_W + visiblePad - scrollOffset) / cellStep) + 1));
 
     // Clip to bar area
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, barY, canvas.width, barH);
+    ctx.rect(0, barY, GAME_W, barH);
     ctx.clip();
 
     ctx.textBaseline = 'middle';
@@ -2373,7 +2451,7 @@ class Enemy {
         ctx.save();
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
-        ctx.drawImage(sprite.canvas, -sprite.center, -sprite.center);
+        ctx.drawImage(sprite.canvas, -sprite.center, -sprite.center, sprite.drawSize, sprite.drawSize);
         ctx.restore();
 
         if (this.slowTimer > 0) {
@@ -2896,7 +2974,7 @@ class Tower {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(this.angle);
-        ctx.drawImage(coreSprite.canvas, -coreSprite.center, -coreSprite.center);
+        ctx.drawImage(coreSprite.canvas, -coreSprite.center, -coreSprite.center, coreSprite.drawSize, coreSprite.drawSize);
         ctx.restore();
 
         // Dynamic direction-dependent overlays
@@ -3302,6 +3380,7 @@ function updateTowerPanel() {
 // Game loop
 // ==========================================
 function gameLoop(timestamp) {
+    syncCanvasResolution();
     frameNow = timestamp || performance.now();
     if (!lastFrameTs) lastFrameTs = frameNow;
     let deltaFrames = (frameNow - lastFrameTs) / (1000 / 60);
@@ -3381,7 +3460,7 @@ function gameLoop(timestamp) {
         if (interest > 0) {
             money += interest;
             floatingTexts.push({
-                x: canvas.width / 2,
+                x: GAME_W / 2,
                 y: 60,
                 text: `+$${interest} interest`,
                 color: '#ffcc00',
@@ -3775,8 +3854,8 @@ nextWaveButton.addEventListener('click', () => {
             if (bonus > 0) {
                 money += bonus;
                 floatingTexts.push({
-                    x: canvas.width / 2,
-                    y: canvas.height / 2,
+                    x: GAME_W / 2,
+                    y: GAME_H / 2,
                     text: `+$${bonus} early!`,
                     color: '#ffcc00',
                     life: 60
@@ -3833,9 +3912,29 @@ if (fullscreenButton) {
     fullscreenButton.addEventListener('click', toggleFullscreen);
 }
 
-document.addEventListener('fullscreenchange', updateFullscreenButton);
-document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
-document.addEventListener('msfullscreenchange', updateFullscreenButton);
+function onFullscreenChange() {
+    updateFullscreenButton();
+    syncCanvasResolution();
+}
+
+document.addEventListener('fullscreenchange', onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+document.addEventListener('msfullscreenchange', onFullscreenChange);
+window.addEventListener('resize', syncCanvasResolution);
+if (window.ResizeObserver) {
+    const canvasResizeObserver = new ResizeObserver(() => syncCanvasResolution());
+    canvasResizeObserver.observe(canvas);
+}
+function watchDevicePixelRatio() {
+    const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    const onChange = () => {
+        syncCanvasResolution();
+        watchDevicePixelRatio();
+    };
+    if (mq.addEventListener) mq.addEventListener('change', onChange, { once: true });
+}
+watchDevicePixelRatio();
+syncCanvasResolution();
 
 if (difficultySelect) {
     difficultySelect.addEventListener('change', () => {

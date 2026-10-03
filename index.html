@@ -36,6 +36,10 @@
             display: block;
             touch-action: none;
             background: #f4f1e8;
+            /* CSS size stays at the logical board. The bitmap is sized in JS
+               to the display resolution so fullscreen does not stretch 800px. */
+            width: 800px;
+            height: 600px;
         }
 
         /* Sidebar.
